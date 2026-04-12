@@ -1,3 +1,5 @@
+🕐 Sunday, April 12, 2026 — 12:38 PM CDT
+CHUNK 1 OF 3:
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -22,9 +24,8 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 .setup-title{font-family:var(--sans);font-size:11px;font-weight:700;letter-spacing:3px;color:var(--muted);text-transform:uppercase;margin-bottom:12px}
 .field{margin-bottom:10px}
 .field label{display:block;font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:1px;margin-bottom:5px;text-transform:uppercase}
-.field input,.field textarea,.field select{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:12px;padding:10px 12px;outline:none;-webkit-appearance:none}
-.field input:focus,.field textarea:focus{border-color:var(--accent)}
-.field textarea{height:80px;resize:none}
+.field input,.field select{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:12px;padding:10px 12px;outline:none;-webkit-appearance:none}
+.field input:focus{border-color:var(--accent)}
 .note{font-family:var(--mono);font-size:10px;color:var(--muted);padding:8px;background:rgba(0,229,255,.04);border-left:2px solid var(--accent);border-radius:0 4px 4px 0;margin-bottom:10px;line-height:1.5}
 .btn{width:100%;padding:14px;border:none;border-radius:6px;font-family:var(--sans);font-size:14px;font-weight:700;letter-spacing:3px;text-transform:uppercase;cursor:pointer;-webkit-appearance:none}
 .btn-primary{background:var(--accent);color:var(--bg)}
@@ -72,7 +73,7 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 .card-reason{margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-family:var(--mono);font-size:11px;color:var(--muted);line-height:1.5}
 .empty{text-align:center;padding:40px 20px;display:none}.empty.visible{display:block}
 .empty-text{font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.7}
-.error-msg{background:rgba(255,61,90,.08);border:1px solid rgba(255,61,90,.2);border-radius:6px;padding:12px 14px;font-family:var(--mono);font-size:11px;color:var(--danger);line-height:1.5;margin-bottom:12px;display:none}
+.error-msg{background:rgba(255,61,90,.08);border:1px solid rgba(255,61,90,.2);border-radius:6px;padding:12px 14px;font-family:var(--mono);font-size:11px;color:var(--danger);line-height:1.5;margin-bottom:12px;display:none;word-break:break-all}
 .error-msg.visible{display:block}
 .footer{text-align:center;padding:20px 0 12px;font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:2px;border-top:1px solid var(--border);margin-top:20px}
 </style>
@@ -84,11 +85,8 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 </div>
 <div class="setup-panel">
 <div class="setup-title">⚙ Configuration</div>
-<div class="field"><label>Kalshi Key ID</label><input type="text" id="keyId" placeholder="a952bcbe-ec3b-4b5b-b8f9-..." autocomplete="off" spellcheck="false"></div>
-<div class="field"><label>Kalshi Private Key (.key file contents)</label><textarea id="privateKey" placeholder="-----BEGIN RSA PRIVATE KEY-----&#10;...&#10;-----END RSA PRIVATE KEY-----" autocomplete="off" spellcheck="false"></textarea></div>
-<div class="field"><label>Anthropic API Key</label><input type="password" id="anthropicKey" placeholder="sk-ant-api03-..." autocomplete="off" spellcheck="false"></div>
-<div class="note">Keys stay in your browser only. Nothing stored. Kalshi requests signed locally. Claude receives market data only.</div>
-<div class="field"><label>Environment</label><select id="envSelect"><option value="demo">DEMO — demo-api.kalshi.co</option><option value="prod">PRODUCTION — api.elections.kalshi.com</option></select></div>
+<div class="field"><label>Anthropic API Key (for Claude analysis)</label><input type="password" id="anthropicKey" placeholder="sk-ant-api03-..." autocomplete="off" spellcheck="false"></div>
+<div class="note">Market data is public — no Kalshi key needed to scan. Anthropic key powers the Claude ACT/WATCH/SKIP decisions. Keys never stored.</div>
 <button class="btn btn-primary" id="scanBtn" onclick="startScan()">▶ RUN SCAN</button>
 </div>
 <div class="error-msg" id="errorMsg"></div>
@@ -102,64 +100,43 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 <button class="btn btn-secondary" onclick="startScan()">↻ RESCAN</button>
 </div>
 <div class="empty" id="emptyState"><div class="empty-text">NO QUALIFYING MARKETS FOUND</div><button class="btn btn-secondary" style="margin-top:16px" onclick="startScan()">↻ RESCAN</button></div>
-<div class="footer">EDGE SCANNER v1.0 · NOT FINANCIAL ADVICE</div>
+<div class="footer">EDGE SCANNER v2.0 · NOT FINANCIAL ADVICE</div>
 </div><script>
-const BASES={demo:'https://demo-api.kalshi.co/trade-api/v2',prod:'https://api.elections.kalshi.com/trade-api/v2'};
+const BASE='https://api.elections.kalshi.com/trade-api/v2';
 const CLAUDE_URL='https://api.anthropic.com/v1/messages';
 const RULES={coreMin:0.60,coreMax:0.85,opMin:0.33,opMax:0.59,minVol:1000,opMinVol:5000,maxSpread:0.20,opMaxSpread:0.10,takerMins:45,priority:['financ','econom','climat','weather','crypto','inx','nasdaq'],deprio:['polit','entertain','sport']};
 let scanning=false;
 
-async function importKey(pem){
-  const clean=pem.replace(/-----[^-]+-----/g,'').replace(/\s+/g,'');
-  const binary=atob(clean);
-  const bytes=new Uint8Array(binary.length);
-  for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);
-  const isPrivateKey=pem.includes('BEGIN PRIVATE KEY');
-  if(isPrivateKey){
-    return crypto.subtle.importKey('pkcs8',bytes.buffer,{name:'RSA-PSS',hash:{name:'SHA-256'}},false,['sign']);
-  }
-  // PKCS#1 RSA key — convert to PKCS#8 by prepending algorithm identifier
-  const rsaOID=new Uint8Array([0x30,0x0d,0x06,0x09,0x2a,0x86,0x48,0x86,0xf7,0x0d,0x01,0x01,0x01,0x05,0x00]);
-  function asn1Len(n){if(n<0x80)return new Uint8Array([n]);const hex=n.toString(16).padStart(n>0xff?4:2,'0');const b=hex.match(/../g).map(x=>parseInt(x,16));return new Uint8Array([0x80|b.length,...b]);}
-  const octetContent=new Uint8Array([...bytes]);
-  const octetLen=asn1Len(octetContent.length);
-  const octetStr=new Uint8Array([0x04,...octetLen,...octetContent]);
-  const version=new Uint8Array([0x02,0x01,0x00]);
-  const seqContent=new Uint8Array([...version,...rsaOID,...octetStr]);
-  const seqLen=asn1Len(seqContent.length);
-  const pkcs8=new Uint8Array([0x30,...seqLen,...seqContent]);
-  return crypto.subtle.importKey('pkcs8',pkcs8.buffer,{name:'RSA-PSS',hash:{name:'SHA-256'}},false,['sign']);
-}
-
-async function sign(pem,ts,method,path){
-  const key=await importKey(pem);
-  const msg=new TextEncoder().encode(`${ts}${method}${path}`);
-  const sig=await crypto.subtle.sign({name:'RSA-PSS',saltLength:32},key,msg);
-  return btoa(String.fromCharCode(...new Uint8Array(sig)));
-}
-
-async function kGet(path,qs=''){
-  const env=document.getElementById('envSelect').value;
-  const base=BASES[env];
-  const keyId=document.getElementById('keyId').value.trim();
-  const pem=document.getElementById('privateKey').value.trim();
-  const ts=String(Date.now());
-  const sig=await sign(pem,ts,'GET','/trade-api/v2'+path);
-  const r=await fetch(base+path+(qs?'?'+qs:''),{method:'GET',headers:{'KALSHI-ACCESS-KEY':keyId,'KALSHI-ACCESS-SIGNATURE':sig,'KALSHI-ACCESS-TIMESTAMP':ts,'Content-Type':'application/json'}});
-  if(!r.ok){const t=await r.text();throw new Error(`Kalshi ${r.status}: ${t}`);}
+async function pubGet(path,qs=''){
+  const url=BASE+path+(qs?'?'+qs:'');
+  const r=await fetch(url,{method:'GET',headers:{'Content-Type':'application/json'}});
+  if(!r.ok){const t=await r.text();throw new Error(`${r.status} ${path}: ${t.slice(0,120)}`);}
   return r.json();
 }
 
 async function fetchMarkets(){
   let all=[],cursor='',pages=0;
   setLoad('FETCHING MARKETS...');
-  do{const d=await kGet('/markets','status=open&limit=1000'+(cursor?'&cursor='+cursor:''));all=all.concat(d.markets||[]);cursor=d.cursor||'';pages++;setLoad(`FETCHING MARKETS... (${all.length})`);}while(cursor&&pages<8);
+  do{
+    const d=await pubGet('/markets','status=open&limit=1000'+(cursor?'&cursor='+cursor:''));
+    all=all.concat(d.markets||[]);
+    cursor=d.cursor||'';
+    pages++;
+    setLoad(`FETCHING MARKETS... (${all.length})`);
+  }while(cursor&&pages<8);
   return all;
 }
 
 async function fetchCategories(tickers){
-  const map={};const uniq=[...new Set(tickers)].slice(0,40);let done=0;
-  for(const t of uniq){try{const d=await kGet('/events/'+t);map[t]=(d.event?.category||'').toLowerCase();}catch{map[t]='unknown';}done++;setLoad(`CATEGORIES... (${done}/${uniq.length})`);}
+  const map={};
+  const uniq=[...new Set(tickers)].slice(0,40);
+  let done=0;
+  for(const t of uniq){
+    try{const d=await pubGet('/events/'+t);map[t]=(d.event?.category||'').toLowerCase();}
+    catch{map[t]='unknown';}
+    done++;
+    setLoad(`CATEGORIES... (${done}/${uniq.length})`);
+  }
   return map;
 }
 
@@ -167,7 +144,8 @@ function filterMarkets(markets,catMap){
   const core=[],op=[];
   for(const m of markets){
     const price=parseFloat(m.last_price_dollars||m.yes_bid_dollars||0);
-    const yBid=parseFloat(m.yes_bid_dollars||0);const yAsk=parseFloat(m.yes_ask_dollars||0);
+    const yBid=parseFloat(m.yes_bid_dollars||0);
+    const yAsk=parseFloat(m.yes_ask_dollars||0);
     const spread=(yAsk>0&&yBid>0)?yAsk-yBid:1;
     const vol=parseFloat(m.volume_fp||0);
     if(!price||vol<RULES.minVol)continue;
@@ -178,24 +156,33 @@ function filterMarkets(markets,catMap){
     const isPri=RULES.priority.some(k=>cat.includes(k)||m.ticker.toLowerCase().includes(k));
     const isDep=RULES.deprio.some(k=>cat.includes(k));
     function tryAdd(p,side){
-      if(p>=RULES.coreMin&&p<=RULES.coreMax&&spread<=RULES.maxSpread)core.push({ticker:m.ticker,title:m.title||m.yes_sub_title||'',price:p,side,spread,vol,cat,isPri,role,mins,zone:'core'});
-      else if(p>=RULES.opMin&&p<=RULES.opMax&&spread<=RULES.opMaxSpread&&vol>=RULES.opMinVol&&!isDep&&role==='MAKER')op.push({ticker:m.ticker,title:m.title||m.yes_sub_title||'',price:p,side,spread,vol,cat,isPri,role,mins,zone:'op'});}
-    tryAdd(price,'YES');const noP=parseFloat((1-price).toFixed(4));if(noP!==price)tryAdd(noP,'NO');
+      if(p>=RULES.coreMin&&p<=RULES.coreMax&&spread<=RULES.maxSpread){
+        core.push({ticker:m.ticker,title:m.title||m.yes_sub_title||'',price:p,side,spread,vol,cat,isPri,role,mins});
+      } else if(p>=RULES.opMin&&p<=RULES.opMax&&spread<=RULES.opMaxSpread&&vol>=RULES.opMinVol&&!isDep&&role==='MAKER'){
+        op.push({ticker:m.ticker,title:m.title||m.yes_sub_title||'',price:p,side,spread,vol,cat,isPri,role,mins});
+      }
+    }
+    tryAdd(price,'YES');
+    const noP=parseFloat((1-price).toFixed(4));
+    if(noP!==price)tryAdd(noP,'NO');
   }
   const s=(a,b)=>(b.isPri-a.isPri)||(b.price-a.price);
   return{core:core.sort(s).slice(0,15),op:op.sort(s).slice(0,10)};
 }
 
-async function claude(core,op){
+async function claudeAnalyze(core,op){
   const ak=document.getElementById('anthropicKey').value.trim();
   if(!ak||(core.length+op.length===0))return null;
   setLoad('CLAUDE ANALYZING...');
   const markets=[...core.map(m=>({...m,zone:'CORE'})),...op.map(m=>({...m,zone:'OPPORTUNISTIC'}))];
-  const prompt=`You are a Kalshi edge trading decision engine. Rules: Core Zone 60-85 cents full size Maker or Taker under 45min. Opportunistic 33-59 cents reduced size Maker only. Priority categories: financials economics climate weather crypto SP500 Nasdaq. Deprioritized: politics entertainment sports. Verdict options: ACT WATCH SKIP. Markets: ${JSON.stringify(markets)}. Return ONLY JSON array: [{"ticker":"...","verdict":"ACT|WATCH|SKIP","reason":"one sentence"}]`;
-  const r=await fetch(CLAUDE_URL,{method:'POST',headers:{'Content-Type':'application/json','x-api-key':ak,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1500,messages:[{role:'user',content:prompt}]})});
-  if(!r.ok)return null;
-  const d=await r.json();
-  try{return JSON.parse((d.content?.[0]?.text||'').replace(/```json|```/g,'').trim());}catch{return null;}
+  const prompt=`You are a Kalshi prediction market edge trading decision engine. Research shows statistically significant positive returns for Makers on 60-85 cent contracts. Rules: CORE ZONE 60-85 cents full size, Maker unless under 45 minutes to close then Taker. OPPORTUNISTIC 33-59 cents reduced size Maker only. PRIORITY: financials economics climate weather crypto SP500 Nasdaq. DEPRIORITIZED: politics entertainment sports. Return verdict ACT WATCH or SKIP. Markets: ${JSON.stringify(markets)}. Return ONLY JSON array: [{"ticker":"...","verdict":"ACT|WATCH|SKIP","reason":"one sentence"}]`;
+  try{
+    const r=await fetch(CLAUDE_URL,{method:'POST',headers:{'Content-Type':'application/json','x-api-key':ak,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:2000,messages:[{role:'user',content:prompt}]})});
+    if(!r.ok)return null;
+    const d=await r.json();
+    const text=(d.content?.[0]?.text||'').replace(/```json|```/g,'').trim();
+    return JSON.parse(text);
+  }catch{return null;}
 }
 
 function renderCards(markets,containerId,decisions){
@@ -203,13 +190,14 @@ function renderCards(markets,containerId,decisions){
   if(!markets.length){el.innerHTML='<div style="font-family:var(--mono);font-size:11px;color:var(--muted);padding:8px 0">None found</div>';return;}
   el.innerHTML=markets.map(m=>{
     const dec=decisions?.find(d=>d.ticker===m.ticker);
-    const v=dec?.verdict||'PENDING';const r=dec?.reason||'—';
+    const v=dec?.verdict||'PENDING';
+    const reason=dec?.reason||'—';
     const vc=v==='ACT'?'act':v==='WATCH'?'watch':v==='SKIP'?'skip':'pending';
     const rc=m.role==='TAKER'?'role-taker':'role-maker';
     const tStr=m.mins>1440?`${Math.round(m.mins/1440)}d`:m.mins>60?`${Math.round(m.mins/60)}h`:`${Math.round(m.mins)}m`;
     const vStr=m.vol>=1e6?`$${(m.vol/1e6).toFixed(1)}M`:m.vol>=1000?`$${(m.vol/1000).toFixed(1)}K`:`$${Math.round(m.vol)}`;
     const catStr=(m.cat||'?').toUpperCase().slice(0,12);
-    return `<div class="contract-card ${vc}"><div class="card-top"><div><div class="card-ticker">${m.ticker}</div><div class="card-side">${m.side}</div></div><div class="card-verdict verdict-${v.toLowerCase()}">${v}</div></div><div class="card-title">${m.title||'—'}</div><div class="card-metrics"><div class="metric"><span class="metric-val">${(m.price*100).toFixed(0)}¢</span><span class="metric-key">PRICE</span></div><div class="metric"><span class="metric-val">${(m.spread*100).toFixed(0)}¢</span><span class="metric-key">SPREAD</span></div><div class="metric"><span class="metric-val">${vStr}</span><span class="metric-key">VOLUME</span></div></div><div class="card-meta"><span class="role-badge ${rc}">${m.role} · ${tStr}</span><span class="card-cat">${catStr}${m.isPri?' ★':''}</span></div>${v!=='PENDING'?`<div class="card-reason">${r}</div>`:''}</div>`;
+    return `<div class="contract-card ${vc}"><div class="card-top"><div><div class="card-ticker">${m.ticker}</div><div class="card-side">${m.side} SIDE</div></div><div class="card-verdict verdict-${v.toLowerCase()}">${v}</div></div><div class="card-title">${m.title||'—'}</div><div class="card-metrics"><div class="metric"><span class="metric-val">${(m.price*100).toFixed(0)}¢</span><span class="metric-key">PRICE</span></div><div class="metric"><span class="metric-val">${(m.spread*100).toFixed(0)}¢</span><span class="metric-key">SPREAD</span></div><div class="metric"><span class="metric-val">${vStr}</span><span class="metric-key">VOLUME</span></div></div><div class="card-meta"><span class="role-badge ${rc}">${m.role} · ${tStr}</span><span class="card-cat">${catStr}${m.isPri?' ★':''}</span></div>${v!=='PENDING'?`<div class="card-reason">${reason}</div>`:''}</div>`;
   }).join('');
 }
 
@@ -221,10 +209,10 @@ function setActive(on){$('statusDot').className='status-dot'+(on?' active':'');}
 
 async function startScan(){
   if(scanning)return;
-  const keyId=$('keyId').value.trim();const privKey=$('privateKey').value.trim();
-  if(!keyId||!privKey){$('errorMsg').textContent='Enter your Kalshi Key ID and Private Key.';show('errorMsg');return;}
-  scanning=true;hide('errorMsg');hide('results');hide('emptyState');
-  $('scanBar').classList.remove('visible');show('loading');setActive(true);$('scanBtn').disabled=true;
+  scanning=true;
+  hide('errorMsg');hide('results');hide('emptyState');
+  $('scanBar').classList.remove('visible');
+  show('loading');setActive(true);$('scanBtn').disabled=true;
   try{
     const allMarkets=await fetchMarkets();
     setLoad('IDENTIFYING CANDIDATES...');
@@ -234,13 +222,19 @@ async function startScan(){
     const{core,op}=filterMarkets(allMarkets,catMap);
     const total=core.length+op.length;
     let decisions=null;
-    if(total>0)decisions=await claude(core,op);
+    if(total>0)decisions=await claudeAnalyze(core,op);
     hide('loading');
     if(total===0){show('emptyState');}
     else{$('coreCount').textContent=core.length;$('opCount').textContent=op.length;renderCards(core,'coreCards',decisions);renderCards(op,'opCards',decisions);show('results');}
-    const now=new Date();$('scanTime').textContent='SCANNED '+now.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});
-    $('scanCount').textContent=`${allMarkets.length} MARKETS · ${total} QUALIFIED`;show('scanBar');
-  }catch(err){hide('loading');$('errorMsg').textContent='Error: '+err.message;show('errorMsg');setActive(false);}
+    const now=new Date();
+    $('scanTime').textContent='SCANNED '+now.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    $('scanCount').textContent=`${allMarkets.length} MARKETS · ${total} QUALIFIED`;
+    show('scanBar');
+  }catch(err){
+    hide('loading');
+    $('errorMsg').textContent='Error: '+err.message;
+    show('errorMsg');setActive(false);
+  }
   scanning=false;$('scanBtn').disabled=false;setActive(false);
 }
 </script>
