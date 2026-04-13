@@ -170,7 +170,7 @@ async function fetchMarkets(){
       const r=await fetch(BASE+'/markets?status=open&limit=1000'+(cursor?'&cursor='+encodeURIComponent(cursor):''));
       if(!r.ok)throw new Error('HTTP '+r.status);
       const d=await r.json();
-      (d.markets||[]).forEach(m=>{marketData[m.ticker]={last_price_dollars:m.last_price_dollars,yes_bid_dollars:m.yes_bid_dollars,yes_ask_dollars:m.yes_ask_dollars,dollar_volume:m.dollar_volume||0,volume_fp:m.volume_fp,title:m.title||m.yes_sub_title||m.ticker,category:m.category||'',close_time:m.close_time};});
+      (d.markets||[]).forEach(m=>{marketData[m.ticker]={last_price_dollars:m.last_price_dollars,yes_bid_dollars:m.yes_bid_dollars,yes_ask_dollars:m.yes_ask_dollars,dollar_volume:parseFloat(m.liquidity_dollars||m.dollar_volume||0),volume_fp:m.volume_fp,title:m.title||m.yes_sub_title||m.ticker,category:m.category||'',close_time:m.close_time};});
       all=all.concat(d.markets||[]);cursor=d.cursor||'';pages++;
       setLoad('FETCHING MARKETS... ('+all.length+')');
     }while(cursor&&pages<10&&isRunning);
