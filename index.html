@@ -54,6 +54,7 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 .field-val{font-family:var(--mono);font-size:13px;color:var(--text);display:block}
 .field-val.price{color:var(--accent2)}
 .field-val.time{color:var(--warn)}
+.field-val.urgent{color:var(--danger);font-weight:bold}
 .empty{text-align:center;padding:40px 20px;display:none}.empty.visible{display:block}
 .empty-text{font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.7}
 .error-msg{background:rgba(255,61,90,.08);border:1px solid rgba(255,61,90,.2);border-radius:6px;padding:12px;font-family:var(--mono);font-size:11px;color:var(--danger);margin-bottom:12px;display:none;word-break:break-all}
@@ -69,7 +70,7 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 </div>
 <div class="setup-panel" id="setupPanel">
   <div class="setup-title">⚙ Configuration</div>
-  <div class="note">Scans Kalshi for Financials · Economics · Climate · Politics · Crypto · Science. No filters. No recommendations. Raw candidate feed for EdgeHound SOP.</div>
+  <div class="note">Scans Kalshi for Financials · Economics · Climate · Politics · Crypto · Science. Sorted by soonest close. No filters. No recommendations. Raw feed for EdgeHound SOP.</div>
   <button class="btn btn-primary" id="startBtn" onclick="startScanning()">▶ CONNECT & SCAN</button>
 </div>
 <div class="error-msg" id="errorMsg"></div>
@@ -86,24 +87,24 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 <div class="results" id="results"></div>
 <div class="empty" id="emptyState"><div class="empty-text">SCANNING...<br>NO QUALIFYING CONTRACTS YET</div></div>
 <div id="stopWrap" style="display:none"><button class="btn-stop" onclick="stopScan()">✕ STOP & RESET</button></div>
-<div class="footer">EDGE SCANNER v4.1 · EDGEHOUND FEED · NOT FINANCIAL ADVICE</div>
+<div class="footer">EDGE SCANNER v4.2 · EDGEHOUND FEED · NOT FINANCIAL ADVICE</div>
 </div>
 <script>
 const BASE='https://raspy-wind-6d67.ersatzfaux7.workers.dev';
 
-// Kalshi category names that map to our 6 target categories
+// Events endpoint category mapping
 const CAT_MAP={
-  'Financials':'Financials',
+  'Financials':'Financials','Companies':'Financials',
   'Economics':'Economics',
   'Climate and Weather':'Climate',
-  'Politics':'Politics',
-  'Elections':'Politics',
+  'Politics':'Politics','Elections':'Politics',
   'Crypto':'Crypto',
-  'Science and Technology':'Science',
-  'Technology':'Science'
+  'Science and Technology':'Science','Technology':'Science','World':'Science'
 };
 
-const TARGET_CATS=new Set(Object.keys(CAT_MAP));
+// Short-term financial/crypto series to fetch directly
+const SERIES=['KXINX','KXNDX','KXDOW','KXBTC','KXETH','KXSOL','KXCPI','KXPCE','KXPPI','KXFED','KXGOLD','KXOIL','KXGDP','KXJOBS','KXUNEMPLOY'];
+const SERIES_CAT={'KXINX':'Financials','KXNDX':'Financials','KXDOW':'Financials','KXBTC':'Crypto','KXETH':'Crypto','KXSOL':'Crypto','KXCPI':'Economics','KXPCE':'Economics','KXPPI':'Economics','KXFED':'Economics','KXGOLD':'Financials','KXOIL':'Financials','KXGDP':'Economics','KXJOBS':'Economics','KXUNEMPLOY':'Economics'};
 
 function formatTime(closeTime){
   if(!closeTime)return'—';
@@ -112,6 +113,11 @@ function formatTime(closeTime){
   if(mins<60)return mins+'m';
   if(mins<1440)return Math.floor(mins/60)+'h '+(mins%60)+'m';
   return Math.floor(mins/1440)+'d '+Math.floor((mins%1440)/60)+'h';
+}
+
+function isUrgent(closeTime){
+  if(!closeTime)return false;
+  return(new Date(closeTime)-Date.now())/60000 < 60;
 }
 
 const candidates=[];
@@ -123,43 +129,65 @@ function setDot(s){const d=$('statusDot');d.className='status-dot';if(s)d.classL
 function showErr(m){$('errorMsg').textContent=m;show('errorMsg');}
 function hideErr(){hide('errorMsg');}
 
+function addCandidate(ticker,title,category,bid,ask,closeTime){
+  if(!ticker||!category)return;
+  // Deduplicate
+  if(candidates.find(c=>c.ticker===ticker))return;
+  candidates.push({ticker,title:title||ticker,category,bid:parseFloat(bid)||0,ask:parseFloat(ask)||0,closeTime});
+}
+
 async function fetchEvents(){
+  let cursor='',pages=0,count=0;
+  do{
+    const url=BASE+'/events?limit=200&with_nested_markets=true&status=open'+(cursor?'&cursor='+encodeURIComponent(cursor):'');
+    const r=await fetch(url);
+    if(!r.ok)throw new Error('Events HTTP '+r.status);
+    const d=await r.json();
+    (d.events||[]).forEach(ev=>{
+      const rawCat=ev.category||'';
+      const mappedCat=CAT_MAP[rawCat];
+      if(!mappedCat)return;
+      (ev.markets||[]).forEach(m=>{
+        addCandidate(m.ticker,m.title||m.yes_sub_title||ev.title,mappedCat,m.yes_bid_dollars,m.yes_ask_dollars,m.close_time||ev.close_time);
+        count++;
+      });
+    });
+    cursor=d.cursor||'';pages++;
+    $('loadingText').textContent='SCANNING EVENTS... ('+candidates.length+')';
+  }while(cursor&&pages<20&&running);
+}
+
+async function fetchSeries(){
+  for(const series of SERIES){
+    if(!running)break;
+    try{
+      const r=await fetch(BASE+'/markets?status=open&limit=100&series_ticker='+series);
+      if(!r.ok)continue;
+      const d=await r.json();
+      const cat=SERIES_CAT[series]||'Financials';
+      (d.markets||[]).forEach(m=>{
+        addCandidate(m.ticker,m.title||m.yes_sub_title,cat,m.yes_bid_dollars,m.yes_ask_dollars,m.close_time);
+      });
+      $('loadingText').textContent='SCANNING SERIES... ('+candidates.length+')';
+    }catch(e){}
+  }
+}
+
+async function fetchAll(){
   if(!running)return;
-  $('loadingText').textContent='FETCHING EVENTS...';
+  $('loadingText').textContent='FETCHING MARKETS...';
   show('loading');
   candidates.length=0;
 
   try{
-    let cursor='',pages=0,totalEvents=0;
-    do{
-      const url=BASE+'/events?limit=200&with_nested_markets=true&status=open'+(cursor?'&cursor='+encodeURIComponent(cursor):'');
-      const r=await fetch(url);
-      if(!r.ok)throw new Error('HTTP '+r.status);
-      const d=await r.json();
-      const events=d.events||[];
-      totalEvents+=events.length;
+    await Promise.all([fetchEvents(),fetchSeries()]);
 
-      events.forEach(ev=>{
-        const rawCat=ev.category||'';
-        if(!TARGET_CATS.has(rawCat))return;
-        const mappedCat=CAT_MAP[rawCat];
-        const eventTitle=ev.title||ev.event_ticker||'';
-
-        (ev.markets||[]).forEach(m=>{
-          const ticker=m.ticker||'';
-          const title=m.title||m.yes_sub_title||eventTitle;
-          const bid=m.yes_bid_dollars;
-          const ask=m.yes_ask_dollars;
-          const closeTime=m.close_time||ev.close_time;
-
-          candidates.push({ticker,title,category:mappedCat,bid,ask,closeTime});
-        });
-      });
-
-      cursor=d.cursor||'';
-      pages++;
-      $('loadingText').textContent='FETCHING... ('+totalEvents+' events, '+candidates.length+' contracts)';
-    }while(cursor&&pages<20&&running);
+    // Sort ALL candidates by closest close time first
+    candidates.sort((a,b)=>{
+      const ta=a.closeTime?new Date(a.closeTime).getTime():9e15;
+      const tb=b.closeTime?new Date(b.closeTime).getTime():9e15;
+      return ta-tb;
+    });
 
     hide('loading');
     setDot('active');
@@ -170,7 +198,7 @@ async function fetchEvents(){
     hideErr();
   }catch(e){
     hide('loading');
-    if(running){showErr('Error: '+e.message+'. Retrying in 30s...');setTimeout(fetchEvents,30000);}
+    if(running){showErr('Error: '+e.message+'. Retrying in 30s...');setTimeout(fetchAll,30000);}
   }
 }
 
@@ -179,6 +207,7 @@ const DISPLAY_ORDER=['Financials','Economics','Climate','Politics','Crypto','Sci
 function renderResults(){
   const bycat={};
   DISPLAY_ORDER.forEach(c=>{bycat[c]=[];});
+  // candidates already sorted by close time globally
   candidates.forEach(m=>{if(bycat[m.category])bycat[m.category].push(m);});
 
   const total=candidates.length;
@@ -197,12 +226,14 @@ function renderResults(){
     list.forEach(m=>{
       const bid=m.bid>0?Math.round(m.bid*100)+'¢':'—';
       const ask=m.ask>0?Math.round(m.ask*100)+'¢':'—';
+      const timeStr=formatTime(m.closeTime);
+      const urgent=isUrgent(m.closeTime);
       html+=`<div class="card">
         <div class="card-ticker">${m.ticker}</div>
         <div class="card-title">${m.title}</div>
         <div class="card-grid">
           <div class="field"><span class="field-label">Category</span><span class="field-val">${m.category}</span></div>
-          <div class="field"><span class="field-label">Time to Close</span><span class="field-val time">${formatTime(m.closeTime)}</span></div>
+          <div class="field"><span class="field-label">Time to Close</span><span class="field-val time${urgent?' urgent':''}">${timeStr}</span></div>
           <div class="field full"><span class="field-label">YES Price</span><span class="field-val price">BID ${bid} / ASK ${ask}</span></div>
         </div>
       </div>`;
@@ -214,8 +245,8 @@ function renderResults(){
 function startScanning(){
   hideErr();hide('setupPanel');show('loading');setDot('connecting');
   $('startBtn').disabled=true;$('stopWrap').style.display='block';
-  running=true;fetchEvents();
-  scanInterval=setInterval(fetchEvents,180000);
+  running=true;fetchAll();
+  scanInterval=setInterval(fetchAll,180000);
 }
 
 function stopScan(){
