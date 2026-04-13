@@ -69,7 +69,7 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 </div>
 <div class="setup-panel" id="setupPanel">
   <div class="setup-title">⚙ Configuration</div>
-  <div class="note">Scans Kalshi for Financials · Economics · Climate · Politics · Crypto · Science contracts. No filters. No recommendations. Raw candidate feed for EdgeHound SOP.</div>
+  <div class="note">Scans Kalshi for Financials · Economics · Climate · Politics · Crypto · Science. No filters. No recommendations. Raw candidate feed for EdgeHound SOP.</div>
   <button class="btn btn-primary" id="startBtn" onclick="startScanning()">▶ CONNECT & SCAN</button>
 </div>
 <div class="error-msg" id="errorMsg"></div>
@@ -86,144 +86,124 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 <div class="results" id="results"></div>
 <div class="empty" id="emptyState"><div class="empty-text">SCANNING...<br>NO QUALIFYING CONTRACTS YET</div></div>
 <div id="stopWrap" style="display:none"><button class="btn-stop" onclick="stopScan()">✕ STOP & RESET</button></div>
-<div class="footer">EDGE SCANNER v4.0 · EDGEHOUND FEED · NOT FINANCIAL ADVICE</div>
+<div class="footer">EDGE SCANNER v4.1 · EDGEHOUND FEED · NOT FINANCIAL ADVICE</div>
 </div>
 <script>
 const BASE='https://raspy-wind-6d67.ersatzfaux7.workers.dev';
 
-// Sports/entertainment ticker prefixes to block
-const BLOCKED_PREFIXES=[
-  'kxmvesport','kxmvecross','kxmlb','kxnba','kxnfl','kxnhl','kxmls',
-  'kxnascar','kxpga','kxtennis','kxsoccer','kxufc','kxncaa','kxwnba',
-  'kxnhle','kxcbb','kxnfldr','kxnfldraft'
-];
+// Kalshi category names that map to our 6 target categories
+const CAT_MAP={
+  'Financials':'Financials',
+  'Economics':'Economics',
+  'Climate and Weather':'Climate',
+  'Politics':'Politics',
+  'Elections':'Politics',
+  'Crypto':'Crypto',
+  'Science and Technology':'Science',
+  'Technology':'Science'
+};
 
-// Sports/entertainment keywords in title to block
-const BLOCKED_WORDS=[
-  'home run','runs scored','goals scored','wins by','touchdowns',
-  'points scored','total bases','hits?','strikeouts','rebounds',
-  'assists','yards','field goal','hat trick','clean sheet',
-  'box office','oscar','emmy','grammy','golden globe','award'
-];
-
-// Category map based on ticker prefix
-function getCategory(ticker,title){
-  const t=ticker.toLowerCase();
-  const ti=(title||'').toLowerCase();
-  if(t.startsWith('kxbtc')||t.startsWith('kxeth')||t.startsWith('kxsol')||t.startsWith('kxcrypto')||t.startsWith('kxxbt')||ti.includes('bitcoin')||ti.includes('ethereum')||ti.includes('crypto'))return'Crypto';
-  if(t.startsWith('kxinx')||t.startsWith('kxspx')||t.startsWith('kxndx')||t.startsWith('kxdow')||t.startsWith('kxfed')||t.startsWith('kxrate')||t.startsWith('kxgold')||t.startsWith('kxoil')||t.startsWith('kxipo')||ti.includes('s&p')||ti.includes('nasdaq')||ti.includes('fed')||ti.includes('interest rate')||ti.includes('ipo')||ti.includes('stock'))return'Financials';
-  if(t.startsWith('kxcpi')||t.startsWith('kxgdp')||t.startsWith('kxjobs')||t.startsWith('kxunemploy')||t.startsWith('kxinfla')||t.startsWith('kxpce')||t.startsWith('kxppi')||ti.includes('inflation')||ti.includes('gdp')||ti.includes('unemployment')||ti.includes('jobs report')||ti.includes('recession'))return'Economics';
-  if(t.startsWith('kxwarm')||t.startsWith('kxtemp')||t.startsWith('kxhurr')||t.startsWith('kxerupt')||t.startsWith('kxquake')||ti.includes('temperature')||ti.includes('hurricane')||ti.includes('climate')||ti.includes('celsius')||ti.includes('weather')||ti.includes('storm'))return'Climate';
-  if(t.startsWith('kxpres')||t.startsWith('kxelect')||t.startsWith('kxsenat')||t.startsWith('kxhous')||t.startsWith('kxg7')||t.startsWith('kxperson')||t.startsWith('kxnext')||ti.includes('president')||ti.includes('election')||ti.includes('senate')||ti.includes('congress')||ti.includes('prime minister')||ti.includes('pope'))return'Politics';
-  if(t.startsWith('kxmars')||t.startsWith('kxfusion')||t.startsWith('kxai')||t.startsWith('kxcolonize')||ti.includes('mars')||ti.includes('fusion')||ti.includes('ai ')||ti.includes('space')||ti.includes('technology')||ti.includes('science'))return'Science';
-  return'Other';
-}
-
-function isBlocked(ticker,title){
-  const t=ticker.toLowerCase();
-  const ti=(title||'').toLowerCase();
-  if(BLOCKED_PREFIXES.some(p=>t.startsWith(p)))return true;
-  if(BLOCKED_WORDS.some(w=>ti.includes(w)))return true;
-  return false;
-}
+const TARGET_CATS=new Set(Object.keys(CAT_MAP));
 
 function formatTime(closeTime){
   if(!closeTime)return'—';
   const mins=Math.round((new Date(closeTime)-Date.now())/60000);
   if(mins<0)return'CLOSED';
   if(mins<60)return mins+'m';
-  if(mins<1440)return Math.floor(mins/60)+'h '+( mins%60)+'m';
+  if(mins<1440)return Math.floor(mins/60)+'h '+(mins%60)+'m';
   return Math.floor(mins/1440)+'d '+Math.floor((mins%1440)/60)+'h';
 }
 
-const CATS=['Financials','Economics','Climate','Politics','Crypto','Science'];
-const markets={};
+const candidates=[];
 let running=false,scanInterval=null;
 const $=id=>document.getElementById(id);
 const show=id=>$(id).classList.add('visible');
 const hide=id=>$(id).classList.remove('visible');
-
 function setDot(s){const d=$('statusDot');d.className='status-dot';if(s)d.classList.add(s);}
 function showErr(m){$('errorMsg').textContent=m;show('errorMsg');}
 function hideErr(){hide('errorMsg');}
 
-async function fetchMarkets(){
+async function fetchEvents(){
   if(!running)return;
-  $('loadingText').textContent='FETCHING MARKETS...';
+  $('loadingText').textContent='FETCHING EVENTS...';
   show('loading');
+  candidates.length=0;
+
   try{
-    let all=[],cursor='',pages=0;
+    let cursor='',pages=0,totalEvents=0;
     do{
-      const r=await fetch(BASE+'/markets?status=open&limit=1000'+(cursor?'&cursor='+encodeURIComponent(cursor):''));
+      const url=BASE+'/events?limit=200&with_nested_markets=true&status=open'+(cursor?'&cursor='+encodeURIComponent(cursor):'');
+      const r=await fetch(url);
       if(!r.ok)throw new Error('HTTP '+r.status);
       const d=await r.json();
-      const batch=d.markets||[];
-      batch.forEach(m=>{
-        const ticker=m.ticker||'';
-        const title=m.title||m.yes_sub_title||ticker;
-        if(isBlocked(ticker,title))return;
-        const cat=getCategory(ticker,title);
-        if(cat==='Other')return;
-        markets[ticker]={
-          ticker,
-          title,
-          category:cat,
-          yes_bid:m.yes_bid_dollars,
-          yes_ask:m.yes_ask_dollars,
-          close_time:m.close_time
-        };
+      const events=d.events||[];
+      totalEvents+=events.length;
+
+      events.forEach(ev=>{
+        const rawCat=ev.category||'';
+        if(!TARGET_CATS.has(rawCat))return;
+        const mappedCat=CAT_MAP[rawCat];
+        const eventTitle=ev.title||ev.event_ticker||'';
+
+        (ev.markets||[]).forEach(m=>{
+          const ticker=m.ticker||'';
+          const title=m.title||m.yes_sub_title||eventTitle;
+          const bid=m.yes_bid_dollars;
+          const ask=m.yes_ask_dollars;
+          const closeTime=m.close_time||ev.close_time;
+
+          candidates.push({ticker,title,category:mappedCat,bid,ask,closeTime});
+        });
       });
-      all=all.concat(batch);
+
       cursor=d.cursor||'';
       pages++;
-      $('loadingText').textContent='FETCHING MARKETS... ('+all.length+')';
-    }while(cursor&&pages<15&&running);
+      $('loadingText').textContent='FETCHING... ('+totalEvents+' events, '+candidates.length+' contracts)';
+    }while(cursor&&pages<20&&running);
 
     hide('loading');
     setDot('active');
     show('statusBar');
-    $('statusText').textContent='LIVE — '+all.length+' fetched';
+    $('statusText').textContent='LIVE — '+candidates.length+' contracts';
     $('statusRight').textContent=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
     renderResults();
     hideErr();
   }catch(e){
     hide('loading');
-    if(running){showErr('Error: '+e.message+'. Retrying in 30s...');setTimeout(fetchMarkets,30000);}
+    if(running){showErr('Error: '+e.message+'. Retrying in 30s...');setTimeout(fetchEvents,30000);}
   }
 }
 
+const DISPLAY_ORDER=['Financials','Economics','Climate','Politics','Crypto','Science'];
+
 function renderResults(){
   const bycat={};
-  CATS.forEach(c=>{bycat[c]=[];});
-  Object.values(markets).forEach(m=>{
-    if(bycat[m.category])bycat[m.category].push(m);
-  });
+  DISPLAY_ORDER.forEach(c=>{bycat[c]=[];});
+  candidates.forEach(m=>{if(bycat[m.category])bycat[m.category].push(m);});
 
-  const total=Object.values(bycat).reduce((s,a)=>s+a.length,0);
+  const total=candidates.length;
   $('scanTime').textContent='UPDATED '+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});
-  $('scanCount').textContent=Object.keys(markets).length+' SCANNED · '+total+' CANDIDATES';
+  $('scanCount').textContent=total+' CANDIDATES';
   show('scanBar');
 
   if(total===0){hide('results');show('emptyState');return;}
   hide('emptyState');show('results');
 
   let html='';
-  CATS.forEach(cat=>{
+  DISPLAY_ORDER.forEach(cat=>{
     const list=bycat[cat];
     if(!list.length)return;
     html+=`<div class="cat-header"><div class="cat-label">${cat}</div><div class="cat-count">${list.length}</div><div class="cat-line"></div></div>`;
     list.forEach(m=>{
-      const bid=m.yes_bid>0?Math.round(m.yes_bid*100)+'¢':'—';
-      const ask=m.yes_ask>0?Math.round(m.yes_ask*100)+'¢':'—';
-      const price='BID '+bid+' / ASK '+ask;
-      const timeLeft=formatTime(m.close_time);
+      const bid=m.bid>0?Math.round(m.bid*100)+'¢':'—';
+      const ask=m.ask>0?Math.round(m.ask*100)+'¢':'—';
       html+=`<div class="card">
         <div class="card-ticker">${m.ticker}</div>
         <div class="card-title">${m.title}</div>
         <div class="card-grid">
           <div class="field"><span class="field-label">Category</span><span class="field-val">${m.category}</span></div>
-          <div class="field"><span class="field-label">Time to Close</span><span class="field-val time">${timeLeft}</span></div>
-          <div class="field full"><span class="field-label">YES Price</span><span class="field-val price">${price}</span></div>
+          <div class="field"><span class="field-label">Time to Close</span><span class="field-val time">${formatTime(m.closeTime)}</span></div>
+          <div class="field full"><span class="field-label">YES Price</span><span class="field-val price">BID ${bid} / ASK ${ask}</span></div>
         </div>
       </div>`;
     });
@@ -232,25 +212,17 @@ function renderResults(){
 }
 
 function startScanning(){
-  hideErr();
-  hide('setupPanel');
-  show('loading');
-  setDot('connecting');
-  $('startBtn').disabled=true;
-  $('stopWrap').style.display='block';
-  running=true;
-  fetchMarkets();
-  scanInterval=setInterval(fetchMarkets,180000);
+  hideErr();hide('setupPanel');show('loading');setDot('connecting');
+  $('startBtn').disabled=true;$('stopWrap').style.display='block';
+  running=true;fetchEvents();
+  scanInterval=setInterval(fetchEvents,180000);
 }
 
 function stopScan(){
-  running=false;
-  if(scanInterval)clearInterval(scanInterval);
-  Object.keys(markets).forEach(k=>delete markets[k]);
+  running=false;if(scanInterval)clearInterval(scanInterval);
+  candidates.length=0;
   hide('statusBar');hide('results');hide('emptyState');hide('scanBar');hide('loading');
-  show('setupPanel');
-  $('startBtn').disabled=false;
-  $('stopWrap').style.display='none';
+  show('setupPanel');$('startBtn').disabled=false;$('stopWrap').style.display='none';
   setDot('');hideErr();
 }
 </script>
