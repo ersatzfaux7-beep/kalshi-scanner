@@ -172,7 +172,7 @@ async function fetchMarkets(){
       const d=await r.json();
       (d.markets||[]).forEach(m=>{const t=(m.ticker||'').toLowerCase();const ti=(m.title||'').toLowerCase();const et=(m.event_ticker||'').toLowerCase();
 // Block sports/entertainment/social parlays - only keep financial/economic/political/climate/crypto/tech
-const blocked=['kxmvesport','kxmvecross','kxmlbhr','kxmlbgame','kxnba','kxnfl','kxnhl','kxmls'];
+const blocked=['kxmvesport','kxmvecross','kxmlb','kxnba','kxnfl','kxnhl','kxmls','kxnascar','kxpga','kxtennis','kxsoccer','kxufc','kxwwe','kxncaa','kxnascar'];
 if(blocked.some(b=>t.startsWith(b)||et.startsWith(b)))return;
 // Also block by sports content in title
 if(ti.includes('home run')||ti.includes('goals scored')||ti.includes('runs scored')||ti.includes('wins by')||ti.includes('touchdowns')||ti.includes('points scored'))return;marketData[m.ticker]={last_price_dollars:m.last_price_dollars,yes_bid_dollars:m.yes_bid_dollars,yes_ask_dollars:m.yes_ask_dollars,dollar_volume:parseFloat(m.liquidity_dollars||m.dollar_volume||0),volume_fp:m.volume_fp,title:m.title||m.yes_sub_title||m.ticker,category:m.category||'',close_time:m.close_time};});
