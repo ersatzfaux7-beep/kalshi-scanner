@@ -117,7 +117,7 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 </div><script>
 const BASE='https://raspy-wind-6d67.ersatzfaux7.workers.dev';
 const CLAUDE_URL='https://api.anthropic.com/v1/messages';
-const RULES={coreMin:0.60,coreMax:0.85,opMin:0.33,opMax:0.59,minVol:0,opMinVol:0,maxSpread:0.20,opMaxSpread:0.10,takerMins:45,priority:['financ','econom','climat','weather','crypto','inx','nasdaq','spx','fed'],deprio:['sport','nfl','nba','mlb','nhl','nba','soccer','baseball','football','basketball','hockey','kxmvesport','kxmlbgame']};
+const RULES={coreMin:0.60,coreMax:0.85,opMin:0.33,opMax:0.59,minVol:0,opMinVol:0,maxSpread:0.20,opMaxSpread:0.10,takerMins:45,priority:['financ','econom','climat','weather','crypto','inx','nasdaq','spx','fed'],deprio:['entertainment','social','world']};
 const marketData={};
 let scanInterval=null,isAnalyzing=false,isRunning=false;
 const $=id=>document.getElementById(id);
@@ -170,7 +170,12 @@ async function fetchMarkets(){
       const r=await fetch(BASE+'/markets?status=open&limit=1000'+(cursor?'&cursor='+encodeURIComponent(cursor):''));
       if(!r.ok)throw new Error('HTTP '+r.status);
       const d=await r.json();
-      (d.markets||[]).forEach(m=>{const t=(m.ticker||'').toLowerCase();const ti=(m.title||'').toLowerCase();const et=(m.event_ticker||'').toLowerCase();if(t.includes('sport')||t.includes('mlbgame')||et.includes('sport')||et.includes('kxmvecross')||ti.includes('goals scored')||ti.includes('runs scored')||ti.includes('wins by'))return;marketData[m.ticker]={last_price_dollars:m.last_price_dollars,yes_bid_dollars:m.yes_bid_dollars,yes_ask_dollars:m.yes_ask_dollars,dollar_volume:parseFloat(m.liquidity_dollars||m.dollar_volume||0),volume_fp:m.volume_fp,title:m.title||m.yes_sub_title||m.ticker,category:m.category||'',close_time:m.close_time};});
+      (d.markets||[]).forEach(m=>{const t=(m.ticker||'').toLowerCase();const ti=(m.title||'').toLowerCase();const et=(m.event_ticker||'').toLowerCase();
+// Block sports/entertainment/social parlays - only keep financial/economic/political/climate/crypto/tech
+const blocked=['kxmvesport','kxmvecross','kxmlbhr','kxmlbgame','kxnba','kxnfl','kxnhl','kxmls'];
+if(blocked.some(b=>t.startsWith(b)||et.startsWith(b)))return;
+// Also block by sports content in title
+if(ti.includes('home run')||ti.includes('goals scored')||ti.includes('runs scored')||ti.includes('wins by')||ti.includes('touchdowns')||ti.includes('points scored'))return;marketData[m.ticker]={last_price_dollars:m.last_price_dollars,yes_bid_dollars:m.yes_bid_dollars,yes_ask_dollars:m.yes_ask_dollars,dollar_volume:parseFloat(m.liquidity_dollars||m.dollar_volume||0),volume_fp:m.volume_fp,title:m.title||m.yes_sub_title||m.ticker,category:m.category||'',close_time:m.close_time};});
       all=all.concat(d.markets||[]);cursor=d.cursor||'';pages++;
       setLoad('FETCHING MARKETS... ('+all.length+')');
     }while(cursor&&pages<10&&isRunning);
