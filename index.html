@@ -132,7 +132,7 @@ function qualifies(ticker,data){
   const ask=parseFloat(data.yes_ask_dollars||0);
   const price=parseFloat(data.last_price_dollars||data.price_dollars||bid||0);
   const vol=parseFloat(data.dollar_volume||0);
-  const spread=(ask>0&&bid>0)?ask-bid:1;
+  const spread=(ask>0&&bid>0)?ask-bid:(ask>0&&bid===0)?0.05:1;
   if(!price||price<0.01||vol<RULES.minVol)return null;
   const closeT=data.close_time?new Date(data.close_time):null;
   const mins=closeT?(closeT-Date.now())/60000:9999;
