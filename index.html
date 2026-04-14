@@ -87,7 +87,7 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 <div class="results" id="results"></div>
 <div class="empty" id="emptyState"><div class="empty-text">SCANNING...<br>NO QUALIFYING CONTRACTS YET</div></div>
 <div id="stopWrap" style="display:none"><button class="btn-stop" onclick="stopScan()">✕ STOP & RESET</button></div>
-<div class="footer">EDGE SCANNER v4.2 · EDGEHOUND FEED · NOT FINANCIAL ADVICE</div>
+<div class="footer">EDGE SCANNER v4.3 · EDGEHOUND FEED · NOT FINANCIAL ADVICE</div>
 </div>
 <script>
 const BASE='https://raspy-wind-6d67.ersatzfaux7.workers.dev';
@@ -103,8 +103,8 @@ const CAT_MAP={
 };
 
 // Short-term financial/crypto series to fetch directly
-const SERIES=['KXINX','KXNDX','KXDOW','KXBTC','KXETH','KXSOL','KXCPI','KXPCE','KXPPI','KXFED','KXGOLD','KXOIL','KXGDP','KXJOBS','KXUNEMPLOY'];
-const SERIES_CAT={'KXINX':'Financials','KXNDX':'Financials','KXDOW':'Financials','KXBTC':'Crypto','KXETH':'Crypto','KXSOL':'Crypto','KXCPI':'Economics','KXPCE':'Economics','KXPPI':'Economics','KXFED':'Economics','KXGOLD':'Financials','KXOIL':'Financials','KXGDP':'Economics','KXJOBS':'Economics','KXUNEMPLOY':'Economics'};
+const SERIES=['KXINX','KXNDX','KXDOW','KXBTC','KXETH','KXSOL','KXBTCH','KXETHH','KXINXH','KXNDXH','KXCPI','KXPCE','KXPPI','KXFED','KXGOLD','KXOIL','KXWTI','KXGDP','KXJOBS','KXUNEMPLOY','KXHIGH','KXCOLD'];
+const SERIES_CAT={'KXINX':'Financials','KXNDX':'Financials','KXDOW':'Financials','KXBTC':'Crypto','KXETH':'Crypto','KXSOL':'Crypto','KXBTCH':'Crypto','KXETHH':'Crypto','KXINXH':'Financials','KXNDXH':'Financials','KXCPI':'Economics','KXPCE':'Economics','KXPPI':'Economics','KXFED':'Economics','KXGOLD':'Financials','KXOIL':'Financials','KXWTI':'Financials','KXGDP':'Economics','KXJOBS':'Economics','KXUNEMPLOY':'Economics','KXHIGH':'Climate','KXCOLD':'Climate'};
 
 function formatTime(closeTime){
   if(!closeTime)return'—';
@@ -131,6 +131,11 @@ function hideErr(){hide('errorMsg');}
 
 function addCandidate(ticker,title,category,bid,ask,closeTime){
   if(!ticker||!category)return;
+  // Drop closed markets and those closing in less than 15 minutes
+  if(closeTime){
+    const mins=(new Date(closeTime)-Date.now())/60000;
+    if(mins<15)return;
+  }
   // Deduplicate
   if(candidates.find(c=>c.ticker===ticker))return;
   candidates.push({ticker,title:title||ticker,category,bid:parseFloat(bid)||0,ask:parseFloat(ask)||0,closeTime});
