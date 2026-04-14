@@ -87,19 +87,33 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 <div class="results" id="results"></div>
 <div class="empty" id="emptyState"><div class="empty-text">SCANNING...<br>NO QUALIFYING CONTRACTS YET</div></div>
 <div id="stopWrap" style="display:none"><button class="btn-stop" onclick="stopScan()">✕ STOP & RESET</button></div>
-<div class="footer">EDGE SCANNER v4.4 · EDGEHOUND FEED · NOT FINANCIAL ADVICE</div>
+<div class="footer">EDGE SCANNER v4.5 · EDGEHOUND FEED · NOT FINANCIAL ADVICE</div>
 </div>
 <script>
 const BASE='https://raspy-wind-6d67.ersatzfaux7.workers.dev';
 
-// Events endpoint category mapping
+// Events endpoint category mapping - based on actual Kalshi API categories
 const CAT_MAP={
-  'Financials':'Financials','Companies':'Financials',
+  // Financials
+  'Financials':'Financials',
+  'Companies':'Companies',
+  'Transportation':'Financials',
+  // Economics
   'Economics':'Economics',
+  // Climate
   'Climate and Weather':'Climate',
-  'Politics':'Politics','Elections':'Politics',
+  // Politics
+  'Politics':'Politics',
+  'Elections':'Politics',
+  // Mentions (politician/TV show markets - Rachel Maddow, Trump, Pelosi etc)
+  'Mentions':'Politics',
+  // Crypto
   'Crypto':'Crypto',
-  'Science and Technology':'Science','Technology':'Science','World':'Science'
+  // Science
+  'Science and Technology':'Science',
+  'Health':'Science',
+  'World':'Science',
+  'Education':'Science'
 };
 
 // Short-term financial/crypto series to fetch directly
@@ -184,7 +198,7 @@ async function fetchShortTermMarkets(){
       else if(t.startsWith('KXINX')||t.startsWith('KXNASDAQ')||t.startsWith('KXWTI')||t.startsWith('KXGOLD')||t.startsWith('KXUSDJPY'))cat='Financials';
       else if(t.startsWith('KXCPI')||t.startsWith('KXPCE')||t.startsWith('KXFED')||t.startsWith('KXGDP')||t.startsWith('KXJOBS')||t.startsWith('KXUNEMPLOY')||t.startsWith('KXARMOMINF'))cat='Economics';
       else if(t.startsWith('KXTEMP')||t.startsWith('KXHIGH')||t.startsWith('KXCOLD')||t.startsWith('KXTNOTE'))cat='Climate';
-      else if(t.startsWith('KXTRUMP')||t.startsWith('KXPELOSI')||t.startsWith('KXNEWSNATION')||t.startsWith('KXMADDOW')||t.startsWith('KXHANNITY')||t.startsWith('KXFOXNEWS')||t.startsWith('KXMSNBC'))cat='Politics';
+      else if(t.startsWith('KXTRUMP')||t.startsWith('KXPELOSI')||t.startsWith('KXNEWSNATION')||t.startsWith('KXMADDOW')||t.startsWith('KXHANNITY')||t.startsWith('KXFOX')||t.startsWith('KXMSNBC')||t.includes('MENTION')||t.startsWith('KXBIDEN')||t.startsWith('KXTRUMP')||t.startsWith('KXSCOTUS')||t.startsWith('KXCONGRESS')||t.startsWith('KXIRANMEN')||t.startsWith('KXAOCMENTION')||t.startsWith('KXBERNIE'))cat='Politics';
       if(!cat)return; // skip sports and unknowns
       addCandidate(ticker,m.title||m.yes_sub_title,cat,m.yes_bid_dollars,m.yes_ask_dollars,m.close_time);
     });
@@ -222,7 +236,7 @@ async function fetchAll(){
   }
 }
 
-const DISPLAY_ORDER=['Financials','Economics','Climate','Politics','Crypto','Science'];
+const DISPLAY_ORDER=['Financials','Economics','Climate','Politics','Crypto','Science','Companies'];
 
 function renderResults(){
   const bycat={};
