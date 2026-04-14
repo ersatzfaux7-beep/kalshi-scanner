@@ -87,7 +87,7 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 <div class="results" id="results"></div>
 <div class="empty" id="emptyState"><div class="empty-text">SCANNING...<br>NO QUALIFYING CONTRACTS YET</div></div>
 <div id="stopWrap" style="display:none"><button class="btn-stop" onclick="stopScan()">✕ STOP & RESET</button></div>
-<div class="footer">EDGE SCANNER v4.3 · EDGEHOUND FEED · NOT FINANCIAL ADVICE</div>
+<div class="footer">EDGE SCANNER v4.4 · EDGEHOUND FEED · NOT FINANCIAL ADVICE</div>
 </div>
 <script>
 const BASE='https://raspy-wind-6d67.ersatzfaux7.workers.dev';
@@ -162,20 +162,35 @@ async function fetchEvents(){
   }while(cursor&&pages<20&&running);
 }
 
-async function fetchSeries(){
-  for(const series of SERIES){
-    if(!running)break;
-    try{
-      const r=await fetch(BASE+'/markets?status=open&limit=100&series_ticker='+series);
-      if(!r.ok)continue;
-      const d=await r.json();
-      const cat=SERIES_CAT[series]||'Financials';
-      (d.markets||[]).forEach(m=>{
-        addCandidate(m.ticker,m.title||m.yes_sub_title,cat,m.yes_bid_dollars,m.yes_ask_dollars,m.close_time);
-      });
-      $('loadingText').textContent='SCANNING SERIES... ('+candidates.length+')';
-    }catch(e){}
-  }
+// Known mention/politician series to fetch directly
+const MENTION_SERIES=['KXTRUMPMENTIONB','KXPELOSIMENTION','KXNEWSNATIONMENTION','KXMADDOWMENTION','KXHANNITYMENT','KXFOXMENT','KXCNNMENT','KXMSNBCMENT','KXRUSHMENT'];
+
+async function fetchShortTermMarkets(){
+  // Fetch markets closing within 7 days using time window
+  const now=Math.floor(Date.now()/1000);
+  const week=now+(7*24*3600);
+  let cursor='',pages=0;
+  do{
+    const url=BASE+'/markets?status=open&limit=1000&min_close_ts='+now+'&max_close_ts='+week+(cursor?'&cursor='+encodeURIComponent(cursor):'');
+    const r=await fetch(url);
+    if(!r.ok)break;
+    const d=await r.json();
+    (d.markets||[]).forEach(m=>{
+      const ticker=m.ticker||'';
+      const t=ticker.toUpperCase();
+      // Determine category from ticker prefix
+      let cat=null;
+      if(t.startsWith('KXBTC')||t.startsWith('KXETH')||t.startsWith('KXSOL')||t.startsWith('KXXRP')||t.startsWith('KXDOGE')||t.startsWith('KXBNB')||t.startsWith('KXHYPE')||t.startsWith('KXSHIBA'))cat='Crypto';
+      else if(t.startsWith('KXINX')||t.startsWith('KXNASDAQ')||t.startsWith('KXWTI')||t.startsWith('KXGOLD')||t.startsWith('KXUSDJPY'))cat='Financials';
+      else if(t.startsWith('KXCPI')||t.startsWith('KXPCE')||t.startsWith('KXFED')||t.startsWith('KXGDP')||t.startsWith('KXJOBS')||t.startsWith('KXUNEMPLOY')||t.startsWith('KXARMOMINF'))cat='Economics';
+      else if(t.startsWith('KXTEMP')||t.startsWith('KXHIGH')||t.startsWith('KXCOLD')||t.startsWith('KXTNOTE'))cat='Climate';
+      else if(t.startsWith('KXTRUMP')||t.startsWith('KXPELOSI')||t.startsWith('KXNEWSNATION')||t.startsWith('KXMADDOW')||t.startsWith('KXHANNITY')||t.startsWith('KXFOXNEWS')||t.startsWith('KXMSNBC'))cat='Politics';
+      if(!cat)return; // skip sports and unknowns
+      addCandidate(ticker,m.title||m.yes_sub_title,cat,m.yes_bid_dollars,m.yes_ask_dollars,m.close_time);
+    });
+    cursor=d.cursor||'';pages++;
+    $('loadingText').textContent='SCANNING SHORT-TERM... ('+candidates.length+')';
+  }while(cursor&&pages<5&&running);
 }
 
 async function fetchAll(){
@@ -185,7 +200,7 @@ async function fetchAll(){
   candidates.length=0;
 
   try{
-    await Promise.all([fetchEvents(),fetchSeries()]);
+    await Promise.all([fetchEvents(),fetchShortTermMarkets()]);
 
     // Sort ALL candidates by closest close time first
     candidates.sort((a,b)=>{
