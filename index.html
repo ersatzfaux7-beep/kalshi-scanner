@@ -67,7 +67,7 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
   <div class="status-dot" id="statusDot"></div>
 </div>
 <div class="setup-panel" id="setupPanel">
-  <div class="note">Financials · Economics · Climate · Politics · Crypto · Science · Companies. Sorted soonest-first. No filters. No recommendations. EdgeHound SOP feed.</div>
+  <div class="note">Financials · Economics · Climate · Politics · Crypto · Science · Companies. Closing within 2 hours. Soonest first. No recommendations. EdgeHound SOP feed.</div>
   <button class="btn btn-primary" id="startBtn" onclick="startScanning()">▶ CONNECT & SCAN</button>
 </div>
 <div class="error-msg" id="errorMsg"></div>
@@ -84,7 +84,7 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 <div class="results" id="results"></div>
 <div class="empty" id="emptyState"><div class="empty-text">SCANNING...<br>NO QUALIFYING CONTRACTS YET</div></div>
 <div id="stopWrap" style="display:none"><button class="btn-stop" onclick="stopScan()">✕ STOP & RESET</button></div>
-<div class="footer">EDGE SCANNER v5.0 · EDGEHOUND FEED · NOT FINANCIAL ADVICE</div>
+<div class="footer">EDGE SCANNER v5.1 · EDGEHOUND FEED · NOT FINANCIAL ADVICE</div>
 </div>
 <script>
 const BASE='https://raspy-wind-6d67.ersatzfaux7.workers.dev';
@@ -159,7 +159,7 @@ async function fetchEvents(){
 // Fetch short-term markets (closes within 7 days) — catches daily/hourly contracts
 async function fetchShortTerm(){
   const now=Math.floor(Date.now()/1000);
-  const week=now+(7*24*3600);
+  const week=now+(2*3600);
   let cursor='',pages=0;
   do{
     const url=BASE+'/markets?status=open&limit=1000&min_close_ts='+now+'&max_close_ts='+week+(cursor?'&cursor='+encodeURIComponent(cursor):'');
