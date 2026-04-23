@@ -70,7 +70,7 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 <body>
 <div class="app">
 <div class="header">
-  <div><div class="header-title">EDGE SCANNER</div><div class="header-sub">KALSHI · EDGEHOUND COMPATIBLE · v9.4</div></div>
+  <div><div class="header-title">EDGE SCANNER</div><div class="header-sub">KALSHI · EDGEHOUND COMPATIBLE · v9.5</div></div>
   <div class="status-dot" id="statusDot"></div>
 </div>
 <div class="setup-panel" id="setupPanel">
@@ -98,7 +98,7 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 <div id="stopWrap" style="display:none">
   <button class="btn-stop" onclick="stopScan()">✕ STOP & RESET</button>
 </div>
-<div class="footer">EDGE SCANNER v9.4 · EDGEHOUND FEED · NOT FINANCIAL ADVICE</div>
+<div class="footer">EDGE SCANNER v9.5 · EDGEHOUND FEED · NOT FINANCIAL ADVICE</div>
 </div>
 <script>
 const BASE='https://raspy-wind-6d67.ersatzfaux7.workers.dev';
@@ -169,8 +169,8 @@ async function fetchMarkets(){
     function getCat(ticker){
       const t=ticker.toUpperCase();
       // Block daily bracket series - too granular, flood scanner
-      const DAILY_BLOCK=['KXXRPD-','KXBTCD-','KXETHD-','KXSOLD-','KXSOLE-','KXGOLDD-','KXSILVERD-','KXNATGASD-','KXCOPPERD-','KXBRENTD-','KXDOGED-','KXBNBD-','KXHYPED-','KXSHIBAD-','KXXRP15M','KXBTC15M','KXETH15M','KXSOL15M','KXDOGE15M','KXBNB15M','KXHYPE15M','KXTEMPNYCH-','KXMVESPORTS','KXMVECROSS','KXMVENBA'];
-      if(DAILY_BLOCK.some(b=>t.includes(b.toUpperCase())))return null;
+      const DAILY_BLOCK=['KXXRPD','KXBTCD','KXETHD','KXSOLD','KXSOLE','KXGOLDD','KXSILVERD','KXNATGASD','KXCOPPERD','KXBRENTD','KXDOGED','KXBNBD','KXHYPED','KXSHIBAD','KXXRP15M','KXBTC15M','KXETH15M','KXSOL15M','KXDOGE15M','KXBNB15M','KXHYPE15M','KXTEMPNYCH','KXMVESPORT','KXMVECROSS','KXMVENBA','KXMLBHRR','KXMLBRFI'];
+      if(DAILY_BLOCK.some(b=>t.startsWith(b)))return null;
       for(const[cat,prefixes]of Object.entries(CAT_PREFIXES)){
         if(prefixes.some(p=>t.startsWith(p)))return cat;
       }
