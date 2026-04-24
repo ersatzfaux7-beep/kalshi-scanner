@@ -70,7 +70,7 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 <body>
 <div class="app">
 <div class="header">
-  <div><div class="header-title">EDGE SCANNER</div><div class="header-sub">KALSHI · EDGEHOUND COMPATIBLE · v9.10</div></div>
+  <div><div class="header-title">EDGE SCANNER</div><div class="header-sub">KALSHI · EDGEHOUND COMPATIBLE · v9.11</div></div>
   <div class="status-dot" id="statusDot"></div>
 </div>
 <div class="setup-panel" id="setupPanel">
@@ -98,7 +98,7 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 <div id="stopWrap" style="display:none">
   <button class="btn-stop" onclick="stopScan()">✕ STOP & RESET</button>
 </div>
-<div class="footer">EDGE SCANNER v9.10 · EDGEHOUND FEED · NOT FINANCIAL ADVICE</div>
+<div class="footer">EDGE SCANNER v9.11 · EDGEHOUND FEED · NOT FINANCIAL ADVICE</div>
 </div>
 <script>
 const BASE='https://raspy-wind-6d67.ersatzfaux7.workers.dev';
@@ -213,32 +213,26 @@ async function fetchMarkets(){
         const allSeries=(sd.series||[]).filter(s=>APPROVED_CATS.has(s.category));
         // For series not already covered by the events loop, pull their markets directly
         const PRIORITY_SERIES=['Mentions','Climate and Weather'];
-        const prioritySeries=allSeries.filter(s=>PRIORITY_SERIES.includes(s.category));
-        for(const s of prioritySeries){
-          try{
-            const mr=await fetch(`${BASE}/markets?status=open&limit=200&series_ticker=${s.ticker}`);
-            if(!mr.ok)continue;
-            const md=await mr.json();
-            (md.markets||[]).forEach(m=>{
-              if(seen.has(m.ticker))return;
-              if(/-[BT][\d]/.test(m.ticker)||/-[BT]0\./.test(m.ticker))return;
-              const yesBid=parseFloat(m.yes_bid_dollars)||0;
-              const yesAsk=parseFloat(m.yes_ask_dollars)||0;
-              if(yesBid<0.05&&yesAsk<=0.01)return;
-              const cat=s.category==='Climate and Weather'?'Climate':s.category==='Mentions'?'Mentions':s.category;
-              seen.add(m.ticker);
-              candidates.push({
-                ticker:m.ticker,
-                title:m.yes_sub_title||m.title||m.ticker,
-                cat:cat,
-                bid:Math.round((yesBid)*100),
-                ask:Math.round((yesAsk)*100),
-                closeTime:m.close_time
+        const prioritySeries=allSeries.filter(s=>PRIORITY_SERIES.includes(s.category)).slice(0,40);
+        // Parallel fetch — all at once, fast
+        const seriesFetches=prioritySeries.map(s=>
+          fetch(`${BASE}/markets?status=open&limit=200&series_ticker=${s.ticker}`)
+            .then(r=>r.ok?r.json():null)
+            .then(md=>{
+              if(!md)return;
+              (md.markets||[]).forEach(m=>{
+                if(seen.has(m.ticker))return;
+                if(/-[BT][\d]/.test(m.ticker)||/-[BT]0\./.test(m.ticker))return;
+                const yesBid=parseFloat(m.yes_bid_dollars)||0;
+                const yesAsk=parseFloat(m.yes_ask_dollars)||0;
+                if(yesBid<0.05&&yesAsk<=0.01)return;
+                const cat=s.category==='Climate and Weather'?'Climate':s.category==='Mentions'?'Mentions':s.category;
+                seen.add(m.ticker);
+                candidates.push({ticker:m.ticker,title:m.yes_sub_title||m.title||m.ticker,cat:cat,bid:Math.round(yesBid*100),ask:Math.round(yesAsk*100),closeTime:m.close_time});
               });
-            });
-          }catch(e){}
-          await new Promise(r=>setTimeout(r,50));
-        }
+            }).catch(()=>{})
+        );
+        await Promise.all(seriesFetches);
         // Store all series tickers for later use
         window._kalshiSeriesCount=allSeries.length;
         $('loadingText').textContent=`SERIES REGISTRY: ${allSeries.length} series loaded...`;
