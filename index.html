@@ -98,7 +98,7 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 <div id="stopWrap" style="display:none">
   <button class="btn-stop" onclick="stopScan()">✕ STOP & RESET</button>
 </div>
-<div class="footer">EDGE SCANNER v9.14 · EDGEHOUND FEED · NOT FINANCIAL ADVICE</div>
+<div class="footer">EDGE SCANNER v10.0 · EDGEHOUND FEED · NOT FINANCIAL ADVICE</div>
 </div>
 <script>
 const BASE='https://raspy-wind-6d67.ersatzfaux7.workers.dev';
@@ -200,6 +200,9 @@ async function fetchMarkets(){
         cat,
         bid:Math.round((parseFloat(m.yes_bid_dollars)||0)*100),
         ask:Math.round((parseFloat(m.yes_ask_dollars)||0)*100),
+        noBid:Math.round((parseFloat(m.no_bid_dollars)||0)*100),
+        noAsk:Math.round((parseFloat(m.no_ask_dollars)||0)*100),
+        vol:Math.round(parseFloat(m.volume_fp)||0),
         closeTime:m.close_time
       });
     });
@@ -235,7 +238,7 @@ async function fetchMarkets(){
                 if(mode==='research'&&minsLeft>10080)return;
               }
               seen.add(m.ticker);
-                candidates.push({ticker:m.ticker,title:m.yes_sub_title||m.title||m.ticker,cat:cat,bid:Math.round(yesBid*100),ask:Math.round(yesAsk*100),closeTime:m.close_time});
+                candidates.push({ticker:m.ticker,title:m.yes_sub_title||m.title||m.ticker,cat:cat,bid:Math.round(yesBid*100),ask:Math.round(yesAsk*100),noBid:Math.round((parseFloat(m.no_bid_dollars)||0)*100),noAsk:Math.round((parseFloat(m.no_ask_dollars)||0)*100),vol:Math.round(parseFloat(m.volume_fp)||0),closeTime:m.close_time});
               });
             }).catch(()=>{})
         );
@@ -271,6 +274,9 @@ async function fetchMarkets(){
               cat:mapped,
               bid:Math.round((parseFloat(m.yes_bid_dollars)||0)*100),
               ask:Math.round((parseFloat(m.yes_ask_dollars)||0)*100),
+              noBid:Math.round((parseFloat(m.no_bid_dollars)||0)*100),
+              noAsk:Math.round((parseFloat(m.no_ask_dollars)||0)*100),
+              vol:Math.round(parseFloat(m.volume_fp)||0),
               closeTime:m.close_time
             });
           });
@@ -318,6 +324,9 @@ function renderResults(){
     list.forEach(m=>{
       const bid=m.bid>0?m.bid+'¢':'—';
       const ask=m.ask>0?m.ask+'¢':'—';
+      const noBid=m.noBid>0?m.noBid+'¢':'—';
+      const noAsk=m.noAsk>0?m.noAsk+'¢':'—';
+      const vol=m.vol>0?'$'+m.vol.toLocaleString():'—';
       const t=formatTime(m.closeTime);
       const urgent=m.closeTime&&(new Date(m.closeTime)-Date.now())/60000<60;
       html+=`<div class="card">
@@ -327,6 +336,8 @@ function renderResults(){
           <div class="field"><span class="field-label">Category</span><span class="field-val">${m.cat}</span></div>
           <div class="field"><span class="field-label">Time to Close</span><span class="field-val time${urgent?' urgent':''}">${t}</span></div>
           <div class="field full"><span class="field-label">YES Price</span><span class="field-val price">BID ${bid} / ASK ${ask}</span></div>
+          <div class="field full"><span class="field-label">NO Price</span><span class="field-val price">BID ${noBid} / ASK ${noAsk}</span></div>
+          <div class="field full"><span class="field-label">Volume</span><span class="field-val">${vol}</span></div>
         </div>
       </div>`;
     });
