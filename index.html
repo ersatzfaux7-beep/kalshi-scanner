@@ -4,7 +4,57 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>KALSHI EDGE SCANNER</title>
-<script>if('serviceWorker' in navigator){navigator.serviceWorker.getRegistrations().then(r=>r.forEach(x=>x.unregister()));}</script>
+<script>if('serviceWorker' in navigator){navigator.serviceWorker.getRegistrations().then(r=>r.forEach(x=>x.unregister()));}
+async function fetchPortfolio(){
+  try{
+    const r=await fetch('https://raspy-wind-6d67.ersatzfaux7.workers.dev/portfolio');
+    const d=await r.json();
+    if(d.error){document.getElementById('portBalance').textContent='Error';return;}
+    const bal=parseInt((d.balance||{}).balance||0);
+    const balD=(bal/100).toFixed(2);
+    const poolD=(bal*0.15/100).toFixed(2);
+    document.getElementById('portBalance').textContent='$'+balD;
+    document.getElementById('portPool').textContent='$'+poolD+' available';
+    const pos=(d.positions||[]).filter(p=>parseFloat(p.position_fp||0)!==0);
+    document.getElementById('portPosCount').textContent=pos.length;
+    const totalExp=pos.reduce((s,p)=>s+parseFloat(p.market_exposure_dollars||0),0);
+    const pct=parseFloat(poolD)>0?Math.min(100,(totalExp/parseFloat(poolD))*100):0;
+    const bar=document.getElementById('poolBar');
+    bar.style.width=pct+'%';
+    bar.style.background=pct>80?'#cc4444':pct>50?'#ccaa00':'#00cc44';
+    if(pos.length===0){document.getElementById('portPositions').innerHTML='<div class="port-value neutral">No open positions</div>';}
+    else{
+      let h='';
+      for(const p of pos){
+        const fp=parseFloat(p.position_fp||0);
+        const side=fp>0?'YES':'NO';
+        const cls=fp>0?'yes-side':'no-side';
+        const t=(p.ticker||'').slice(-18);
+        const exp=parseFloat(p.market_exposure_dollars||0).toFixed(2);
+        h+=`<div class="position-item"><span class="position-ticker">${t}</span><span class="${cls}">${side}</span><span>$${exp}</span></div>`;
+      }
+      document.getElementById('portPositions').innerHTML=h;
+    }
+    const fills=(d.fills||[]).slice(0,5);
+    if(fills.length===0){document.getElementById('portFills').innerHTML='<div class="port-value neutral">No fills</div>';}
+    else{
+      let h='';
+      for(const f of fills){
+        const t=(f.ticker||'').slice(-16);
+        const side=(f.side||'').toUpperCase();
+        const price=f.yes_price?Math.round(parseFloat(f.yes_price)*100)+'¢':'—';
+        const cls=side==='YES'?'yes-side':'no-side';
+        h+=`<div class="position-item"><span class="position-ticker">${t}</span><span class="${cls}">${side}</span><span>${price}</span></div>`;
+      }
+      document.getElementById('portFills').innerHTML=h;
+    }
+    document.getElementById('portTime').textContent='Updated '+new Date().toLocaleTimeString();
+  }catch(e){document.getElementById('portBalance').textContent='Error';console.error(e);}
+}
+fetchPortfolio();
+setInterval(fetchPortfolio,180000);
+
+</script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow+Condensed:wght@300;400;600;700;900&display=swap');
 :root{--bg:#080c10;--surface:#0d1318;--border:#1a2535;--accent:#00e5ff;--accent2:#00ff88;--warn:#ffb300;--danger:#ff3d5a;--text:#c8d8e8;--muted:#4a6070;--mono:'Share Tech Mono',monospace;--sans:'Barlow Condensed',sans-serif}
@@ -65,6 +115,19 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 .error-msg{background:rgba(255,61,90,.08);border:1px solid rgba(255,61,90,.2);border-radius:6px;padding:12px;font-family:var(--mono);font-size:11px;color:var(--danger);margin-bottom:12px;display:none;word-break:break-all}
 .error-msg.visible{display:block}
 .footer{text-align:center;padding:20px 0 12px;font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:2px;border-top:1px solid var(--border);margin-top:20px}
+
+  .portfolio-panel{background:#0d1f0d;border:1px solid #1a3a1a;border-radius:8px;padding:14px;margin-bottom:18px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+  .port-label{font-size:9px;letter-spacing:.1em;color:#4a7a4a;text-transform:uppercase;margin-bottom:5px;font-weight:700}
+  .port-value{font-size:20px;font-weight:700;color:#00cc44;font-variant-numeric:tabular-nums}
+  .port-sub{font-size:12px;color:#00cc44;font-weight:600;margin-top:2px}
+  .port-value.neutral{color:#666;font-size:12px}
+  .position-item{background:#0a1a0a;border-radius:4px;padding:5px 7px;margin-bottom:3px;font-size:9px;display:flex;justify-content:space-between;align-items:center;gap:4px}
+  .position-ticker{color:#88bb88;font-weight:600;font-size:8px;flex:1;overflow:hidden}
+  .yes-side{color:#00cc44;font-weight:700}
+  .no-side{color:#cc4444;font-weight:700}
+  .pool-bar-wrap{background:#0a1a0a;border-radius:3px;height:5px;margin-top:5px;overflow:hidden}
+  .pool-bar{height:100%;background:#00cc44;border-radius:3px;transition:width .4s}
+  .port-refresh{font-size:8px;color:#336633;margin-top:4px}
 </style>
 </head>
 <body>
@@ -93,12 +156,30 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
   <div class="scan-info" id="scanTime">—</div>
   <div class="scan-count" id="scanCount">—</div>
 </div>
+<div class="portfolio-panel" id="portfolioPanel">
+  <div>
+    <div class="port-label">Balance</div>
+    <div class="port-value" id="portBalance">—</div>
+    <div class="port-label" style="margin-top:8px">Session Pool (15%)</div>
+    <div class="port-sub" id="portPool">—</div>
+    <div class="pool-bar-wrap"><div class="pool-bar" id="poolBar" style="width:0%"></div></div>
+    <div class="port-refresh" id="portTime"></div>
+  </div>
+  <div>
+    <div class="port-label">Open Positions (<span id="portPosCount">0</span>)</div>
+    <div id="portPositions"><div class="port-value neutral">—</div></div>
+  </div>
+  <div>
+    <div class="port-label">Recent Fills</div>
+    <div id="portFills"><div class="port-value neutral">—</div></div>
+  </div>
+</div>
 <div class="results" id="results"></div>
 <div class="empty" id="emptyState"><div class="empty-text">NO QUALIFYING CONTRACTS<br>IN THIS WINDOW</div></div>
 <div id="stopWrap" style="display:none">
   <button class="btn-stop" onclick="stopScan()">✕ STOP & RESET</button>
 </div>
-<div class="footer">EDGE SCANNER v10.0 · EDGEHOUND FEED · NOT FINANCIAL ADVICE</div>
+<div class="footer">EDGE SCANNER v11.0 · EDGEHOUND FEED · NOT FINANCIAL ADVICE</div>
 </div>
 <script>
 const BASE='https://raspy-wind-6d67.ersatzfaux7.workers.dev';
