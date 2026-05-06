@@ -10,7 +10,7 @@ async function fetchPortfolio(){
     const r=await fetch('https://raspy-wind-6d67.ersatzfaux7.workers.dev/portfolio');
     const d=await r.json();
     if(d.error){document.getElementById('portBalance').textContent='Error';return;}
-    const bal=parseInt((d.balance||{}).balance||0);
+    const bal=parseInt(d.balance||0);
     const balD=(bal/100).toFixed(2);
     const poolD=(bal*0.15/100).toFixed(2);
     document.getElementById('portBalance').textContent='$'+balD;
