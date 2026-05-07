@@ -5,54 +5,122 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>KALSHI EDGE SCANNER</title>
 <script>if('serviceWorker' in navigator){navigator.serviceWorker.getRegistrations().then(r=>r.forEach(x=>x.unregister()));}
-async function fetchPortfolio(){
-  try{
-    const r=await fetch('https://raspy-wind-6d67.ersatzfaux7.workers.dev/portfolio');
-    const d=await r.json();
-    if(d.error){document.getElementById('portBalance').textContent='Error';return;}
-    const bal=parseInt(d.balance||0);
-    const balD=(bal/100).toFixed(2);
-    const poolD=(bal*0.15/100).toFixed(2);
-    document.getElementById('portBalance').textContent='$'+balD;
-    document.getElementById('portPool').textContent='$'+poolD+' available';
-    const pos=(d.positions||[]).filter(p=>parseFloat(p.position_fp||0)!==0);
-    document.getElementById('portPosCount').textContent=pos.length;
-    const totalExp=pos.reduce((s,p)=>s+parseFloat(p.market_exposure_dollars||0),0);
-    const pct=parseFloat(poolD)>0?Math.min(100,(totalExp/parseFloat(poolD))*100):0;
-    const bar=document.getElementById('poolBar');
-    bar.style.width=pct+'%';
-    bar.style.background=pct>80?'#cc4444':pct>50?'#ccaa00':'#00cc44';
-    if(pos.length===0){document.getElementById('portPositions').innerHTML='<div class="port-value neutral">No open positions</div>';}
-    else{
-      let h='';
-      for(const p of pos){
-        const fp=parseFloat(p.position_fp||0);
-        const side=fp>0?'YES':'NO';
-        const cls=fp>0?'yes-side':'no-side';
-        const t=(p.ticker||'').slice(-18);
-        const exp=parseFloat(p.market_exposure_dollars||0).toFixed(2);
-        h+=`<div class="position-item"><span class="position-ticker">${t}</span><span class="${cls}">${side}</span><span>$${exp}</span></div>`;
+
+
+
+function renderHistory(tradeHistory) {
+  if (!tradeHistory || tradeHistory.length === 0) {
+    document.getElementById('historyList').innerHTML = '<div class="port-value neutral">No settled trades</div>';
+    return;
+  }
+
+  // Calculate totals
+  let totalPnl = 0, wins = 0, losses = 0, autopsy_needed = [];
+  for (const t of tradeHistory) {
+    totalPnl += parseFloat(t.pnl || 0);
+    if (t.outcome === 'WIN') wins++;
+    if (t.outcome === 'LOSS') {
+      losses++;
+      if (!t.ticker.includes('SPORT') && !t.ticker.includes('MVE')) {
+        autopsy_needed.push(t.ticker);
       }
-      document.getElementById('portPositions').innerHTML=h;
     }
-    const fills=(d.fills||[]).slice(0,5);
-    if(fills.length===0){document.getElementById('portFills').innerHTML='<div class="port-value neutral">No fills</div>';}
-    else{
-      let h='';
-      for(const f of fills){
-        const t=(f.ticker||'').slice(-16);
-        const side=(f.side||'').toUpperCase();
-        const price=f.yes_price?Math.round(parseFloat(f.yes_price)*100)+'¢':'—';
-        const cls=side==='YES'?'yes-side':'no-side';
-        h+=`<div class="position-item"><span class="position-ticker">${t}</span><span class="${cls}">${side}</span><span>${price}</span></div>`;
+  }
+
+  const totalsEl = document.getElementById('historyTotals');
+  const pnlClass = totalPnl >= 0 ? 'total-val-pos' : 'total-val-neg';
+  totalsEl.innerHTML = `
+    <div class="total-item"><div class="total-label">Net P&L</div><div class="${pnlClass}">${totalPnl >= 0 ? '+' : ''}$${Math.abs(totalPnl).toFixed(2)}</div></div>
+    <div class="total-item"><div class="total-label">Wins</div><div class="total-val-pos">${wins}</div></div>
+    <div class="total-item"><div class="total-label">Losses</div><div class="total-val-neg">${losses}</div></div>
+    <div class="total-item"><div class="total-label">Win Rate</div><div class="total-val-pos">${wins+losses > 0 ? Math.round(wins/(wins+losses)*100) : 0}%</div></div>
+    ${autopsy_needed.length > 0 ? `<div class="total-item"><div class="total-label">Autopsy Needed</div><div class="autopsy-flag">⚑ ${autopsy_needed.length}</div></div>` : ''}
+  `;
+
+  let html = '';
+  for (const t of tradeHistory) {
+    const isSports = t.ticker.includes('SPORT') || t.ticker.includes('MVE') || t.ticker.includes('NFL') || t.ticker.includes('NBA') || t.ticker.includes('NHL') || t.ticker.includes('MLB');
+    const cls = isSports ? 'sports' : (t.outcome === 'WIN' ? 'win' : 'loss');
+    const sideClass = t.side === 'yes' ? 'history-side-yes' : 'history-side-no';
+    const pnlClass = t.pnl >= 0 ? 'history-pnl-win' : 'history-pnl-loss';
+    const pnl = parseFloat(t.pnl || 0);
+    const dateStr = t.date ? t.date.substring(5, 10) : '';
+    const ticker = t.ticker.length > 24 ? t.ticker.slice(-24) : t.ticker;
+    const autopsyFlag = !isSports && t.outcome === 'LOSS' ? ' <span class="autopsy-flag">⚑</span>' : '';
+    html += `<div class="history-item ${cls}">
+      <span class="history-ticker">${ticker}${autopsyFlag}</span>
+      <span class="${sideClass}">${t.side.toUpperCase()}</span>
+      <span class="${pnlClass}">${pnl >= 0 ? '+' : ''}$${Math.abs(pnl).toFixed(2)}</span>
+      <span class="history-date">${dateStr}</span>
+    </div>`;
+  }
+  document.getElementById('historyList').innerHTML = html;
+}
+
+// Override fetchPortfolio to also render history
+const _origFetchPortfolio = fetchPortfolio;
+async function fetchPortfolio() {
+  try {
+    const r = await fetch('https://raspy-wind-6d67.ersatzfaux7.workers.dev/portfolio');
+    const d = await r.json();
+    if (d.error) { document.getElementById('portBalance').textContent = 'Error'; return; }
+
+    const bal = parseInt(d.balance || 0);
+    const balD = (bal/100).toFixed(2);
+    const poolD = (bal*0.15/100).toFixed(2);
+    document.getElementById('portBalance').textContent = '$' + balD;
+    document.getElementById('portPool').textContent = '$' + poolD + ' available';
+
+    const pos = (d.positions || []).filter(p => parseFloat(p.position_fp || 0) !== 0);
+    document.getElementById('portPosCount').textContent = pos.length;
+    const totalExp = pos.reduce((s,p) => s + parseFloat(p.market_exposure_dollars || 0), 0);
+    const pct = parseFloat(poolD) > 0 ? Math.min(100, (totalExp / parseFloat(poolD)) * 100) : 0;
+    const bar = document.getElementById('poolBar');
+    bar.style.width = pct + '%';
+    bar.style.background = pct > 80 ? '#cc4444' : pct > 50 ? '#ccaa00' : '#00cc44';
+
+    if (pos.length === 0) {
+      document.getElementById('portPositions').innerHTML = '<div class="port-value neutral">No open positions</div>';
+    } else {
+      let h = '';
+      for (const p of pos) {
+        const fp = parseFloat(p.position_fp || 0);
+        const side = fp > 0 ? 'YES' : 'NO';
+        const cls = fp > 0 ? 'yes-side' : 'no-side';
+        const t = (p.ticker || '').slice(-18);
+        const exp = parseFloat(p.market_exposure_dollars || 0).toFixed(2);
+        h += `<div class="position-item"><span class="position-ticker">${t}</span><span class="${cls}">${side}</span><span>$${exp}</span></div>`;
       }
-      document.getElementById('portFills').innerHTML=h;
+      document.getElementById('portPositions').innerHTML = h;
     }
-    document.getElementById('portTime').textContent='Updated '+new Date().toLocaleTimeString();
-  }catch(e){document.getElementById('portBalance').textContent='Error';console.error(e);}
+
+    const fills = (d.fills || []).slice(0, 5);
+    if (fills.length === 0) {
+      document.getElementById('portFills').innerHTML = '<div class="port-value neutral">No fills</div>';
+    } else {
+      let h = '';
+      for (const f of fills) {
+        const t = (f.ticker || '').slice(-16);
+        const side = (f.side || '').toUpperCase();
+        const price = f.yes_price_dollars ? Math.round(parseFloat(f.side === 'yes' ? f.yes_price_dollars : f.no_price_dollars) * 100) + '¢' : '—';
+        const cls = side === 'YES' ? 'yes-side' : 'no-side';
+        h += `<div class="position-item"><span class="position-ticker">${t}</span><span class="${cls}">${side}</span><span>${price}</span></div>`;
+      }
+      document.getElementById('portFills').innerHTML = h;
+    }
+
+    document.getElementById('portTime').textContent = 'Updated ' + new Date().toLocaleTimeString();
+
+    // Render trade history
+    renderHistory(d.trade_history || []);
+
+  } catch(e) {
+    document.getElementById('portBalance').textContent = 'Error';
+    console.error(e);
+  }
 }
 fetchPortfolio();
-setInterval(fetchPortfolio,180000);
+setInterval(fetchPortfolio, 180000);
 
 </script>
 <style>
@@ -128,6 +196,24 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
   .pool-bar-wrap{background:#0a1a0a;border-radius:3px;height:5px;margin-top:5px;overflow:hidden}
   .pool-bar{height:100%;background:#00cc44;border-radius:3px;transition:width .4s}
   .port-refresh{font-size:8px;color:#336633;margin-top:4px}
+
+  .history-panel{background:#0d1a2a;border:1px solid #1a2a3a;border-radius:8px;padding:14px;margin-bottom:18px}
+  .history-item{display:flex;justify-content:space-between;align-items:center;padding:5px 8px;margin-bottom:3px;border-radius:4px;font-size:9px;gap:6px}
+  .history-item.win{background:#0a1f0a;border-left:3px solid #00cc44}
+  .history-item.loss{background:#1f0a0a;border-left:3px solid #cc3333}
+  .history-item.sports{background:#1a1a0a;border-left:3px solid #888800;opacity:0.6}
+  .history-ticker{color:#aaa;font-size:8px;flex:1;overflow:hidden}
+  .history-side-yes{color:#00cc44;font-weight:700;min-width:25px}
+  .history-side-no{color:#cc4444;font-weight:700;min-width:25px}
+  .history-pnl-win{color:#00cc44;font-weight:700;min-width:55px;text-align:right}
+  .history-pnl-loss{color:#cc4444;font-weight:700;min-width:55px;text-align:right}
+  .history-date{color:#555;font-size:8px;min-width:40px;text-align:right}
+  .autopsy-flag{color:#ffaa00;font-size:8px;font-weight:700}
+  .history-totals{display:flex;gap:16px;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid #1a2a3a}
+  .total-item{font-size:9px}
+  .total-label{color:#4a6a8a;text-transform:uppercase;letter-spacing:.08em}
+  .total-val-pos{color:#00cc44;font-weight:700}
+  .total-val-neg{color:#cc4444;font-weight:700}
 </style>
 </head>
 <body>
@@ -174,12 +260,17 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
     <div id="portFills"><div class="port-value neutral">—</div></div>
   </div>
 </div>
+<div class="history-panel" id="historyPanel">
+  <div class="port-label">Trade History — Last 20 Settled</div>
+  <div class="history-totals" id="historyTotals"></div>
+  <div id="historyList"><div class="port-value neutral">Loading...</div></div>
+</div>
 <div class="results" id="results"></div>
 <div class="empty" id="emptyState"><div class="empty-text">NO QUALIFYING CONTRACTS<br>IN THIS WINDOW</div></div>
 <div id="stopWrap" style="display:none">
   <button class="btn-stop" onclick="stopScan()">✕ STOP & RESET</button>
 </div>
-<div class="footer">EDGE SCANNER v11.0 · EDGEHOUND FEED · NOT FINANCIAL ADVICE</div>
+<div class="footer">EDGE SCANNER v12.0 · EDGEHOUND FEED · NOT FINANCIAL ADVICE</div>
 </div>
 <script>
 const BASE='https://raspy-wind-6d67.ersatzfaux7.workers.dev';
