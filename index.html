@@ -8,53 +8,95 @@
 
 
 
+function isSportsTicker(ticker) {
+  return ticker.includes('SPORT') || ticker.includes('MVE') || ticker.includes('NFL') ||
+         ticker.includes('NBA') || ticker.includes('NHL') || ticker.includes('MLB') ||
+         ticker.includes('KXMVE');
+}
+
 function renderHistory(tradeHistory) {
   if (!tradeHistory || tradeHistory.length === 0) {
     document.getElementById('historyList').innerHTML = '<div class="port-value neutral">No settled trades</div>';
     return;
   }
 
-  // Calculate totals
-  let totalPnl = 0, wins = 0, losses = 0, autopsy_needed = [];
-  for (const t of tradeHistory) {
-    totalPnl += parseFloat(t.pnl || 0);
-    if (t.outcome === 'WIN') wins++;
-    if (t.outcome === 'LOSS') {
-      losses++;
-      if (!t.ticker.includes('SPORT') && !t.ticker.includes('MVE')) {
-        autopsy_needed.push(t.ticker);
-      }
-    }
+  const sopTrades = tradeHistory.filter(t => !isSportsTicker(t.ticker));
+  const sportsTrades = tradeHistory.filter(t => isSportsTicker(t.ticker));
+
+  // SOP totals
+  let sopPnl = 0, sopWins = 0, sopLosses = 0, autopsyNeeded = 0;
+  for (const t of sopTrades) {
+    const pnl = parseFloat(t.pnl || 0);
+    sopPnl += pnl;
+    if (t.outcome === 'WIN') sopWins++;
+    if (t.outcome === 'LOSS') { sopLosses++; autopsyNeeded++; }
+  }
+
+  // Sports totals
+  let sportsPnl = 0, sportsWins = 0, sportsLosses = 0;
+  for (const t of sportsTrades) {
+    const pnl = parseFloat(t.pnl || 0);
+    sportsPnl += pnl;
+    if (t.outcome === 'WIN') sportsWins++;
+    if (t.outcome === 'LOSS') sportsLosses++;
   }
 
   const totalsEl = document.getElementById('historyTotals');
-  const pnlClass = totalPnl >= 0 ? 'total-val-pos' : 'total-val-neg';
+  const sopClass = sopPnl >= 0 ? 'total-val-pos' : 'total-val-neg';
+  const spClass = sportsPnl >= 0 ? 'total-val-pos' : 'total-val-neg';
+  const wr = sopWins + sopLosses > 0 ? Math.round(sopWins/(sopWins+sopLosses)*100) : 0;
+
   totalsEl.innerHTML = `
-    <div class="total-item"><div class="total-label">Net P&L</div><div class="${pnlClass}">${totalPnl >= 0 ? '+' : ''}$${Math.abs(totalPnl).toFixed(2)}</div></div>
-    <div class="total-item"><div class="total-label">Wins</div><div class="total-val-pos">${wins}</div></div>
-    <div class="total-item"><div class="total-label">Losses</div><div class="total-val-neg">${losses}</div></div>
-    <div class="total-item"><div class="total-label">Win Rate</div><div class="total-val-pos">${wins+losses > 0 ? Math.round(wins/(wins+losses)*100) : 0}%</div></div>
-    ${autopsy_needed.length > 0 ? `<div class="total-item"><div class="total-label">Autopsy Needed</div><div class="autopsy-flag">⚑ ${autopsy_needed.length}</div></div>` : ''}
+    <div style="width:100%;display:flex;gap:16px;flex-wrap:wrap;margin-bottom:6px">
+      <div class="total-item"><div class="total-label">SOP P&L</div><div class="${sopClass}">${sopPnl >= 0 ? '+' : ''}$${Math.abs(sopPnl).toFixed(2)}</div></div>
+      <div class="total-item"><div class="total-label">W/L</div><div class="total-val-pos">${sopWins}W <span class="total-val-neg">${sopLosses}L</span></div></div>
+      <div class="total-item"><div class="total-label">Win Rate</div><div class="${sopClass}">${wr}%</div></div>
+      ${autopsyNeeded > 0 ? `<div class="total-item"><div class="total-label">Autopsy</div><div class="autopsy-flag">⚑ ${autopsyNeeded}</div></div>` : ''}
+      <div class="total-item" style="margin-left:auto"><div class="total-label" style="color:#665500">Partner P&L</div><div class="${spClass}">${sportsPnl >= 0 ? '+' : ''}$${Math.abs(sportsPnl).toFixed(2)} <span style="color:#665500;font-size:8px">${sportsWins}W ${sportsLosses}L</span></div></div>
+    </div>
   `;
 
-  let html = '';
-  for (const t of tradeHistory) {
-    const isSports = t.ticker.includes('SPORT') || t.ticker.includes('MVE') || t.ticker.includes('NFL') || t.ticker.includes('NBA') || t.ticker.includes('NHL') || t.ticker.includes('MLB');
-    const cls = isSports ? 'sports' : (t.outcome === 'WIN' ? 'win' : 'loss');
-    const sideClass = t.side === 'yes' ? 'history-side-yes' : 'history-side-no';
-    const pnlClass = t.pnl >= 0 ? 'history-pnl-win' : 'history-pnl-loss';
-    const pnl = parseFloat(t.pnl || 0);
-    const dateStr = t.date ? t.date.substring(5, 10) : '';
-    const ticker = t.ticker.length > 24 ? t.ticker.slice(-24) : t.ticker;
-    const autopsyFlag = !isSports && t.outcome === 'LOSS' ? ' <span class="autopsy-flag">⚑</span>' : '';
-    html += `<div class="history-item ${cls}">
-      <span class="history-ticker">${ticker}${autopsyFlag}</span>
-      <span class="${sideClass}">${t.side.toUpperCase()}</span>
-      <span class="${pnlClass}">${pnl >= 0 ? '+' : ''}$${Math.abs(pnl).toFixed(2)}</span>
-      <span class="history-date">${dateStr}</span>
-    </div>`;
+  let h = '';
+
+  // SOP trades first
+  if (sopTrades.length > 0) {
+    h += `<div style="font-size:8px;color:#4a6a8a;letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px">SOP TRADES</div>`;
+    for (const t of sopTrades) {
+      const sideClass = t.side === 'yes' ? 'history-side-yes' : 'history-side-no';
+      const pnlClass = parseFloat(t.pnl||0) >= 0 ? 'history-pnl-win' : 'history-pnl-loss';
+      const pnl = parseFloat(t.pnl || 0);
+      const dateStr = t.date ? t.date.substring(5, 10) : '';
+      const ticker = t.ticker.length > 24 ? t.ticker.slice(-24) : t.ticker;
+      const aflag = t.outcome === 'LOSS' ? ' <span class="autopsy-flag">⚑</span>' : '';
+      const cls = t.outcome === 'WIN' ? 'win' : 'loss';
+      h += `<div class="history-item ${cls}">
+        <span class="history-ticker">${ticker}${aflag}</span>
+        <span class="${sideClass}">${t.side.toUpperCase()}</span>
+        <span class="${pnlClass}">${pnl >= 0 ? '+' : ''}$${Math.abs(pnl).toFixed(2)}</span>
+        <span class="history-date">${dateStr}</span>
+      </div>`;
+    }
   }
-  document.getElementById('historyList').innerHTML = html;
+
+  // Partner sports trades
+  if (sportsTrades.length > 0) {
+    h += `<div style="font-size:8px;color:#665500;letter-spacing:.1em;text-transform:uppercase;margin-top:8px;margin-bottom:4px">PARTNER — SPORTS</div>`;
+    for (const t of sportsTrades) {
+      const sideClass = t.side === 'yes' ? 'history-side-yes' : 'history-side-no';
+      const pnlClass = parseFloat(t.pnl||0) >= 0 ? 'history-pnl-win' : 'history-pnl-loss';
+      const pnl = parseFloat(t.pnl || 0);
+      const dateStr = t.date ? t.date.substring(5, 10) : '';
+      const ticker = t.ticker.length > 24 ? t.ticker.slice(-24) : t.ticker;
+      h += `<div class="history-item sports">
+        <span class="history-ticker">${ticker}</span>
+        <span class="${sideClass}">${t.side.toUpperCase()}</span>
+        <span class="${pnlClass}">${pnl >= 0 ? '+' : ''}$${Math.abs(pnl).toFixed(2)}</span>
+        <span class="history-date">${dateStr}</span>
+      </div>`;
+    }
+  }
+
+  document.getElementById('historyList').innerHTML = h;
 }
 
 // Override fetchPortfolio to also render history
@@ -270,7 +312,7 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 <div id="stopWrap" style="display:none">
   <button class="btn-stop" onclick="stopScan()">✕ STOP & RESET</button>
 </div>
-<div class="footer">EDGE SCANNER v12.0 · EDGEHOUND FEED · NOT FINANCIAL ADVICE</div>
+<div class="footer">EDGE SCANNER v13.0 · EDGEHOUND FEED · NOT FINANCIAL ADVICE</div>
 </div>
 <script>
 const BASE='https://raspy-wind-6d67.ersatzfaux7.workers.dev';
