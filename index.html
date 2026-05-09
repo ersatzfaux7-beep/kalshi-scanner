@@ -156,6 +156,12 @@ async function fetchPortfolio() {
     // Render trade history
     renderHistory(d.trade_history || []);
 
+    // Render partner sports panel
+    const sportsTrades = (d.trade_history || []).filter(t => 
+      ['SPORT','MVE','NFL','NBA','NHL','MLB','KXMVE'].some(x => t.ticker.includes(x))
+    );
+    renderPartner(sportsTrades);
+
   } catch(e) {
     document.getElementById('portBalance').textContent = 'Error';
     console.error(e);
@@ -163,6 +169,76 @@ async function fetchPortfolio() {
 }
 fetchPortfolio();
 setInterval(fetchPortfolio, 180000);
+
+
+function renderPartner(sportsTrades) {
+  if (!sportsTrades || sportsTrades.length === 0) {
+    document.getElementById('partnerSummary').innerHTML = '<div class="partner-stat"><div class="partner-label">No sports trades</div></div>';
+    document.getElementById('partnerList').innerHTML = '';
+    return;
+  }
+
+  let totalPnl = 0, wins = 0, losses = 0, totalCost = 0;
+  for (const t of sportsTrades) {
+    const pnl = parseFloat(t.pnl || 0);
+    const cost = parseFloat(t.cost || 0);
+    totalPnl += pnl;
+    totalCost += cost;
+    if (t.outcome === 'WIN') wins++;
+    if (t.outcome === 'LOSS') losses++;
+  }
+
+  const wr = wins + losses > 0 ? Math.round(wins / (wins + losses) * 100) : 0;
+  const pnlClass = totalPnl >= 0 ? 'partner-val-pos' : 'partner-val-neg';
+
+  document.getElementById('partnerSummary').innerHTML = `
+    <div class="partner-stat">
+      <div class="partner-label">Net P&L</div>
+      <div class="${pnlClass}">${totalPnl >= 0 ? '+' : ''}$${Math.abs(totalPnl).toFixed(2)}</div>
+    </div>
+    <div class="partner-stat">
+      <div class="partner-label">Wins</div>
+      <div class="partner-val-pos">${wins}</div>
+    </div>
+    <div class="partner-stat">
+      <div class="partner-label">Losses</div>
+      <div class="partner-val-neg">${losses}</div>
+    </div>
+    <div class="partner-stat">
+      <div class="partner-label">Win Rate</div>
+      <div class="partner-val">${wr}%</div>
+    </div>
+    <div class="partner-stat">
+      <div class="partner-label">Total Wagered</div>
+      <div class="partner-val">$${totalCost.toFixed(2)}</div>
+    </div>
+    <div class="partner-stat">
+      <div class="partner-label">Trades</div>
+      <div class="partner-val">${sportsTrades.length}</div>
+    </div>
+  `;
+
+  let h = '';
+  for (const t of sportsTrades) {
+    const pnl = parseFloat(t.pnl || 0);
+    const cost = parseFloat(t.cost || 0);
+    const cls = t.outcome === 'WIN' ? 'win' : 'loss';
+    const side = (t.side || '').toUpperCase();
+    const sideClass = side === 'YES' ? 'partner-side-yes' : 'partner-side-no';
+    const pnlClass = pnl >= 0 ? 'partner-pnl-win' : 'partner-pnl-loss';
+    const ticker = t.ticker.length > 24 ? t.ticker.slice(-24) : t.ticker;
+    const dateStr = t.date ? t.date.substring(5, 10) : '';
+    h += `<div class="partner-item ${cls}">
+      <span class="partner-ticker">${ticker}</span>
+      <span class="${sideClass}">${side}</span>
+      <span style="color:#665500;font-size:8px;min-width:45px">$${cost.toFixed(2)}</span>
+      <span class="${pnlClass}">${pnl >= 0 ? '+' : ''}$${Math.abs(pnl).toFixed(2)}</span>
+      <span class="partner-date">${dateStr}</span>
+    </div>`;
+  }
+  document.getElementById('partnerList').innerHTML = h;
+  document.getElementById('partnerRefreshTime').textContent = 'Updated ' + new Date().toLocaleTimeString();
+}
 
 </script>
 <style>
@@ -256,12 +332,30 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
   .total-label{color:#4a6a8a;text-transform:uppercase;letter-spacing:.08em}
   .total-val-pos{color:#00cc44;font-weight:700}
   .total-val-neg{color:#cc4444;font-weight:700}
+
+  .partner-panel{background:#111a00;border:1px solid #3a3a00;border-radius:8px;padding:14px;margin-bottom:18px}
+  .partner-header{font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#888800;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
+  .partner-summary{display:flex;gap:14px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid #2a2a00}
+  .partner-stat{font-size:9px}
+  .partner-label{color:#665500;text-transform:uppercase;letter-spacing:.08em}
+  .partner-val-pos{color:#aacc00;font-weight:700;font-size:13px}
+  .partner-val-neg{color:#cc8800;font-weight:700;font-size:13px}
+  .partner-val{color:#aaaa00;font-weight:700;font-size:13px}
+  .partner-item{display:flex;justify-content:space-between;align-items:center;padding:5px 8px;margin-bottom:3px;border-radius:4px;font-size:9px;gap:6px}
+  .partner-item.win{background:#0d1a00;border-left:3px solid #aacc00}
+  .partner-item.loss{background:#1a1000;border-left:3px solid #cc8800}
+  .partner-ticker{color:#999900;font-size:8px;flex:1;overflow:hidden}
+  .partner-side-yes{color:#aacc00;font-weight:700;min-width:25px}
+  .partner-side-no{color:#cc8800;font-weight:700;min-width:25px}
+  .partner-pnl-win{color:#aacc00;font-weight:700;min-width:55px;text-align:right}
+  .partner-pnl-loss{color:#cc8800;font-weight:700;min-width:55px;text-align:right}
+  .partner-date{color:#555500;font-size:8px;min-width:40px;text-align:right}
 </style>
 </head>
 <body>
 <div class="app">
 <div class="header">
-  <div><div class="header-title">EDGE SCANNER</div><div class="header-sub">KALSHI · EDGEHOUND COMPATIBLE · v9.14</div></div>
+  <div><div class="header-title">EDGE SCANNER</div><div class="header-sub">KALSHI · EDGEHOUND COMPATIBLE · v14.0</div></div>
   <div class="status-dot" id="statusDot"></div>
 </div>
 <div class="setup-panel" id="setupPanel">
@@ -307,12 +401,20 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
   <div class="history-totals" id="historyTotals"></div>
   <div id="historyList"><div class="port-value neutral">Loading...</div></div>
 </div>
+<div class="partner-panel" id="partnerPanel">
+  <div class="partner-header">
+    <span>PARTNER — SPORTS BETTING</span>
+    <span id="partnerRefreshTime" style="font-size:8px;color:#555500;font-weight:400"></span>
+  </div>
+  <div class="partner-summary" id="partnerSummary"></div>
+  <div id="partnerList"><div style="font-size:10px;color:#555500">Loading...</div></div>
+</div>
 <div class="results" id="results"></div>
 <div class="empty" id="emptyState"><div class="empty-text">NO QUALIFYING CONTRACTS<br>IN THIS WINDOW</div></div>
 <div id="stopWrap" style="display:none">
   <button class="btn-stop" onclick="stopScan()">✕ STOP & RESET</button>
 </div>
-<div class="footer">EDGE SCANNER v13.0 · EDGEHOUND FEED · NOT FINANCIAL ADVICE</div>
+<div class="footer">EDGE SCANNER v14.0 · EDGEHOUND FEED · NOT FINANCIAL ADVICE</div>
 </div>
 <script>
 const BASE='https://raspy-wind-6d67.ersatzfaux7.workers.dev';
