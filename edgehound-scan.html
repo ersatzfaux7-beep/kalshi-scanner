@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>EdgeHound Live Scan — ersatzfaux7-beep</title>
+<style>
+body{font-family:monospace;background:#0a0a0a;color:#00cc44;padding:20px;margin:0}
+h1{color:#1a5c3a;font-size:14px;margin:0 0 10px}
+.meta{color:#336633;font-size:11px;margin-bottom:16px}
+.city{margin-bottom:20px}
+.city-header{color:#00aaff;font-size:13px;font-weight:bold;margin-bottom:6px;border-bottom:1px solid #1a3a1a;padding-bottom:4px}
+.market{display:flex;gap:12px;font-size:11px;padding:3px 0;border-bottom:1px solid #0d1a0d}
+.ticker{color:#aaa;width:280px;flex-shrink:0}
+.yes{color:#00cc44;width:80px}
+.no{color:#cc4444;width:80px}
+.vol{color:#667766;width:90px}
+.mins{color:#556655;width:60px}
+.loading{color:#336633;font-size:12px}
+#timestamp{color:#226622;font-size:10px;margin-bottom:8px}
+</style>
+</head>
+<body>
+<h1>EDGEHOUND LIVE TEMPERATURE SCAN — GoodGreenGreatGain</h1>
+<div class="meta">Auto-refreshes every 3 minutes. Source: Kalshi API via Cloudflare Worker. EdgeHound SOP compatible.</div>
+<div id="timestamp">Loading...</div>
+<div id="output"><div class="loading">Fetching markets...</div></div>
+
+<script>
+const SERIES = [
+  'KXHIGHCHI','KXHIGHLAX','KXHIGHMIA','KXHIGHNYC','KXHIGHPHL',
+  'KXHIGHSFO','KXHIGHDAL','KXHIGHDEN','KXHIGHPHX','KXHIGHSEA',
+  'KXHIGHATL','KXHIGHAUS',
+  'KXLOWCHI','KXLOWLAX','KXLOWMIA','KXLOWNYC'
+];
+
+const CITY_NAMES = {
+  KXHIGHCHI:'CHICAGO HIGH',KXHIGHLAX:'LOS ANGELES HIGH',KXHIGHMIA:'MIAMI HIGH',
+  KXHIGHNYC:'NEW YORK HIGH',KXHIGHPHL:'PHILADELPHIA HIGH',KXHIGHSFO:'SAN FRANCISCO HIGH',
+  KXHIGHDAL:'DALLAS HIGH',KXHIGHDEN:'DENVER HIGH',KXHIGHPHX:'PHOENIX HIGH',
+  KXHIGHSEA:'SEATTLE HIGH',KXHIGHATL:'ATLANTA HIGH',KXHIGHAUS:'AUSTIN HIGH',
+  KXLOWCHI:'CHICAGO LOW',KXLOWLAX:'LOS ANGELES LOW',KXLOWMIA:'MIAMI LOW',KXLOWNYC:'NEW YORK LOW'
+};
+
+async function fetchMarkets() {
+  const now = new Date();
+  const results = {};
+  
+  for (const series of SERIES) {
+    try {
+      const r = await fetch(`https://raspy-wind-6d67.ersatzfaux7.workers.dev/markets?series_ticker=${series}&status=open&limit=10`);
+      const d = await r.json();
+      const markets = (d.markets || []).filter(m => {
+        const ya = parseFloat(m.yes_ask_dollars || 0);
+        const na = parseFloat(m.no_ask_dollars || 0);
+        const vol = parseFloat(m.volume_fp || 0);
+        return (ya >= 0.10 || na >= 0.10) && vol >= 500;
+      }).map(m => {
+        const close = new Date(m.close_time);
+        const mins = Math.round((close - now) / 60000);
+        return {
+          ticker: m.ticker,
+          yb: parseFloat(m.yes_bid_dollars || 0),
+          ya: parseFloat(m.yes_ask_dollars || 0),
+          nb: parseFloat(m.no_bid_dollars || 0),
+          na: parseFloat(m.no_ask_dollars || 0),
+          vol: parseFloat(m.volume_fp || 0),
+          mins
+        };
+      }).sort((a,b) => a.mins - b.mins);
+      
+      if (markets.length > 0) results[series] = markets;
+    } catch(e) {}
+  }
+  return results;
+}
+
+function minsDisplay(mins) {
+  if (mins < 60) return `${mins}m`;
+  return `${Math.floor(mins/60)}h${(mins%60).toString().padStart(2,'0')}m`;
+}
+
+async function render() {
+  const data = await fetchMarkets();
+  const now = new Date();
+  document.getElementById('timestamp').textContent = 
+    `Last updated: ${now.toLocaleString()} | ${Object.values(data).flat().length} viable markets`;
+  
+  let html = '';
+  for (const [series, markets] of Object.entries(data)) {
+    html += `<div class="city">
+      <div class="city-header">${CITY_NAMES[series] || series}</div>`;
+    for (const m of markets) {
+      const ticker = m.ticker.length > 35 ? m.ticker.slice(-35) : m.ticker;
+      html += `<div class="market">
+        <span class="ticker">${ticker}</span>
+        <span class="yes">YES ${(m.yb*100).toFixed(0)}/${(m.ya*100).toFixed(0)}¢</span>
+        <span class="no">NO ${(m.nb*100).toFixed(0)}/${(m.na*100).toFixed(0)}¢</span>
+        <span class="vol">$${m.vol.toLocaleString('en',{maximumFractionDigits:0})}</span>
+        <span class="mins">${minsDisplay(m.mins)}</span>
+      </div>`;
+    }
+    html += `</div>`;
+  }
+  
+  document.getElementById('output').innerHTML = html || '<div class="loading">No viable markets in current window.</div>';
+}
+
+render();
+setInterval(render, 180000);
+</script>
+</body>
+</html>
